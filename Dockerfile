@@ -1,4 +1,4 @@
-# Stage 1: build Quarkus
+# Stage 1: build
 FROM maven:3.9.3-eclipse-temurin-17 AS build
 WORKDIR /workspace/app
 COPY pom.xml .
@@ -8,6 +8,7 @@ RUN mvn clean package -DskipTests
 # Stage 2: chạy ứng dụng
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /workspace/app/target/quarkus-app/ /app/
+# copy file jar từ target
+COPY --from=build /workspace/app/target/*-runner.jar app.jar
 EXPOSE 8080
-CMD ["java", "-jar", "quarkus-run.jar"]
+CMD ["java", "-jar", "app.jar"]
