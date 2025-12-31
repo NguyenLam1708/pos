@@ -13,7 +13,7 @@ import java.util.List;
 @ApplicationScoped
 public class JwtService {
 
-    @ConfigProperty(name = "smallrye.jwt.sign.key")
+    @ConfigProperty(name = "app.jwt.secret")
     String secret;
 
     @ConfigProperty(name = "mp.jwt.verify.issuer")
