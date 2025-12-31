@@ -1,5 +1,6 @@
-package com.example.pos.entities.order;
+package com.example.pos.entitiy.order;
 
+import com.example.pos.enums.order.OrderStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -7,22 +8,22 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import java.time.LocalDate;
+
 @Entity
+@Table(name = "orders")
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@Table(name = "order_items")
-public class OrderItem {
+public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
-    @Column(name = "order_id", nullable = false)
-    String orderId;
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
+    OrderStatus status;
 
-    @Column(name = "product_id", nullable = false)
-    String productId;
-
-    int quantity;
+    LocalDate createdAt;
 }

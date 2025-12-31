@@ -1,4 +1,4 @@
-package com.example.pos.entities.user;
+package com.example.pos.entitiy.user;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -6,7 +6,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "user_roles")
+@Table(name = "user_roles",
+        uniqueConstraints = {
+          @UniqueConstraint(columnNames = {"user_id", "role_id"})
+        }
+)
 @NoArgsConstructor
 @AllArgsConstructor
 @Data

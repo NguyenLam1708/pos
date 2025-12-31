@@ -13,10 +13,10 @@ import java.util.List;
 @ApplicationScoped
 public class JwtService {
 
-    @ConfigProperty(name = "app.jwt.secret")
+    @ConfigProperty(name = "smallrye.jwt.sign.key")
     String secret;
 
-    @ConfigProperty(name = "app.jwt.issuer")
+    @ConfigProperty(name = "mp.jwt.verify.issuer")
     String issuer;
 
     @ConfigProperty(name = "app.jwt.expiration-ms")
@@ -26,7 +26,7 @@ public class JwtService {
         return Algorithm.HMAC256(secret);
     }
 
-    public String generateToken(String userId, String email, List<String> roles, String phoneNumber) {
+    public String generateToken(String userId, String email, List<String> roleCodes, String phoneNumber) {
         Instant now = Instant.now();
 
         return JWT.create()
@@ -36,14 +36,7 @@ public class JwtService {
                 .withExpiresAt(Date.from(now.plusMillis(expirationMs))) // exp
                 .withClaim("email", email)
                 .withClaim("phoneNumber", phoneNumber)
-                .withArrayClaim("groups", roles.toArray(new String[0])) // roles
+                .withArrayClaim("groups", roleCodes.toArray(new String[0])) // roles
                 .sign(algorithm());
-    }
-
-    public DecodedJWT verifyToken(String token) {
-        return JWT.require(algorithm())
-                .withIssuer(issuer)
-                .build()
-                .verify(token);
     }
 }

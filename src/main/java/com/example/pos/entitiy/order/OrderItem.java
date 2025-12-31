@@ -1,6 +1,5 @@
-package com.example.pos.entities.inventory;
+package com.example.pos.entitiy.order;
 
-import com.example.pos.enums.inventory.ReservationStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -8,29 +7,22 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
-
 @Entity
-@Table(name = "inventory_reservations")
-@Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
+@Data
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class InventoryReservation {
-
+@Table(name = "order_items")
+public class OrderItem {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     String id;
 
     @Column(name = "order_id", nullable = false)
     String orderId;
+
     @Column(name = "product_id", nullable = false)
     String productId;
 
     int quantity;
-
-    @Enumerated(EnumType.STRING)
-    ReservationStatus status;
-
-    LocalDateTime expiresAt;  // giữ chỗ trong X phút
 }

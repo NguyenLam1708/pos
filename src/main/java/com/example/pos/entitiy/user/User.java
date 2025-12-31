@@ -1,12 +1,11 @@
-package com.example.pos.entities.user;
+package com.example.pos.entitiy.user;
 
 import com.example.pos.enums.user.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.util.Date;
-
+@Builder
 @Entity
 @Table(name = "users")
 @NoArgsConstructor
@@ -21,7 +20,7 @@ public class User {
     @Column(name = "phone")
     String phone;
 
-    @Column(name = "email")
+    @Column(name = "email", unique = true, nullable = false)
     String email;
 
     @Column(name = "full_name")

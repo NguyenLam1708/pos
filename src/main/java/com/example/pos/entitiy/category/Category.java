@@ -1,4 +1,4 @@
-package com.example.pos.entities.category;
+package com.example.pos.entitiy.category;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;

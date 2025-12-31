@@ -1,4 +1,4 @@
-package com.example.pos.entities.product;
+package com.example.pos.entitiy.inventory;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -8,16 +8,19 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 @Entity
-@Table(name = "Product")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Product {
+@Table(name = "inventory")
+public class Inventory {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID )
+    @GeneratedValue(strategy = GenerationType.UUID)
     String id;
-    String name;
-    String categoryId;
-    long price;
+
+    @Column(name = "product_id",nullable = false)
+    String productId;
+
+    int totalQuantity; // Tổng tồn
+    int availableQuantity; // có thể bán
 }
