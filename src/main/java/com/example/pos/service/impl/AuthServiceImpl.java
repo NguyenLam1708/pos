@@ -1,31 +1,59 @@
 package com.example.pos.service.impl;
 
-import com.example.pos.dto.LoginRequest;
-import com.example.pos.dto.response.AuthResponse;
-import com.example.pos.reponsitories.RoleRepository;
-import com.example.pos.reponsitories.UserRepository;
+import at.favre.lib.crypto.bcrypt.BCrypt;
+import com.example.pos.dto.request.LoginRequest;
+import com.example.pos.dto.response.LoginResponse;
+import com.example.pos.exception.BusinessException;
+import com.example.pos.reponsitory.UserRepository;
+import com.example.pos.reponsitory.UserRoleRepository;
 import com.example.pos.service.AuthService;
 import com.example.pos.service.JwtService;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 
 @ApplicationScoped
+@Slf4j
 public class AuthServiceImpl implements AuthService {
 
     @Inject
     UserRepository userRepository;
 
     @Inject
-    RoleRepository roleRepository;
+    UserRoleRepository userRoleRepository;
 
     @Inject
     JwtService jwtService;
 
+    public Uni<LoginResponse> login(LoginRequest req) {
 
-    @Override
-    public Uni<AuthResponse> login(LoginRequest loginRequest) {
-        return null;
+        return userRepository.findByEmail(req.getEmail())
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "Email not found"))
+                .flatMap(user -> {
+
+                   var result = BCrypt.verifyer().verify(req.getPassword().toCharArray(), user.getPassword());
+
+                    if (!result.verified) {
+                        log.warn("Login failed for email: {}, password: {}", req.getEmail(), req.getPassword());
+                        return Uni.createFrom().failure(new BusinessException(401, "Invalid credentials"));
+                    }
+
+                    return userRoleRepository.findRoleCodesByUserId(user.getId())
+                            .map(roles -> {
+                                log.info("Roles from DB: {}", roles);
+
+                                String token = jwtService.generateToken(
+                                        user.getId(),
+                                        user.getEmail(),
+                                        roles,
+                                        user.getPhone()
+
+                                );
+
+                                return new LoginResponse(token, user.getId());
+                            });
+                });
     }
-
 }
