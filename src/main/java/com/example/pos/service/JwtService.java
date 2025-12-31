@@ -1,42 +1,64 @@
 package com.example.pos.service;
 
-import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import java.io.InputStream;
+import java.security.KeyFactory;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 
 @ApplicationScoped
 public class JwtService {
 
-    @ConfigProperty(name = "app.jwt.secret")
-    String secret;
+    private final Algorithm algorithm;
 
-    @ConfigProperty(name = "mp.jwt.verify.issuer")
-    String issuer;
-
-    @ConfigProperty(name = "app.jwt.expiration-ms")
-    long expirationMs;
-
-    private Algorithm algorithm() {
-        return Algorithm.HMAC256(secret);
+    public JwtService() {
+        this.algorithm = Algorithm.RSA256(null, loadPrivateKey());
     }
 
-    public String generateToken(String userId, String email, List<String> roleCodes, String phoneNumber) {
+    private RSAPrivateKey loadPrivateKey() {
+        try {
+            InputStream is = getClass()
+                    .getClassLoader()
+                    .getResourceAsStream("privateKey.pem");
+
+            String key = new String(is.readAllBytes())
+                    .replace("-----BEGIN PRIVATE KEY-----", "")
+                    .replace("-----END PRIVATE KEY-----", "")
+                    .replaceAll("\\s", "");
+
+            byte[] decoded = Base64.getDecoder().decode(key);
+
+            PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
+            return (RSAPrivateKey)
+                    KeyFactory.getInstance("RSA").generatePrivate(spec);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Cannot load private key", e);
+        }
+    }
+
+    public String generateToken(
+            String userId,
+            String email,
+            List<String> roles,
+            String phoneNumber
+    ) {
         Instant now = Instant.now();
 
-        return JWT.create()
-                .withIssuer(issuer)
-                .withSubject(userId)                       // sub
-                .withIssuedAt(Date.from(now))              // iat
-                .withExpiresAt(Date.from(now.plusMillis(expirationMs))) // exp
+        return com.auth0.jwt.JWT.create()
+                .withIssuer("pos-app")
+                .withSubject(userId)
+                .withIssuedAt(Date.from(now))
+                .withExpiresAt(Date.from(now.plusSeconds(3600)))
                 .withClaim("email", email)
                 .withClaim("phoneNumber", phoneNumber)
-                .withArrayClaim("groups", roleCodes.toArray(new String[0])) // roles
-                .sign(algorithm());
+                .withArrayClaim("groups", roles.toArray(new String[0]))
+                .sign(algorithm);
     }
 }

@@ -25,7 +25,7 @@ public class UserResource {
 
     @POST
     @WithSession
-    //@RolesAllowed("ADMIN")
+    @RolesAllowed("ADMIN")
     public Uni<Response> createUser(CreateUserRequest req) {
 
         return userService.createUser(req)
