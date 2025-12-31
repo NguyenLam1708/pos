@@ -10,6 +10,7 @@ import com.example.pos.reponsitory.RoleRepository;
 import com.example.pos.reponsitory.UserRepository;
 import com.example.pos.reponsitory.UserRoleRepository;
 import com.example.pos.service.UserService;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -27,6 +28,7 @@ public class UserServiceImpl implements UserService {
     UserRoleRepository userRoleRepository;
 
     @Override
+    @WithTransaction
     public Uni<User> createUser(CreateUserRequest req) {
 
         if (!req.getPassword().equals(req.getConfirmPassword())) {
