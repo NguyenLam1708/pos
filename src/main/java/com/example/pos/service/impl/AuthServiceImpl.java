@@ -12,6 +12,7 @@ import com.example.pos.service.JwtService;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
 @ApplicationScoped

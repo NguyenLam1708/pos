@@ -8,6 +8,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "roles",
         uniqueConstraints = {
@@ -21,7 +23,7 @@ import lombok.experimental.FieldDefaults;
 public class Role {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  String id;
+  UUID id;
 
   @Column(nullable = false)
   String name;

@@ -17,7 +17,7 @@ public class AuthenticatedUser implements Principal {
 
     @Override
     public String getName() {
-        return email;
+        return userId;
     }
 
 }

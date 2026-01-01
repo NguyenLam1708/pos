@@ -2,6 +2,5 @@ package com.example.pos.enums.user;
 
 public enum UserStatus {
   ACTIVE,
-  PENDING,
-  DELETED
+  BANNED,
 }

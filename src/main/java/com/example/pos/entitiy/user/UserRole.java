@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "user_roles",
         uniqueConstraints = {
@@ -17,12 +19,12 @@ import lombok.NoArgsConstructor;
 public class UserRole {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  String id;
+  UUID id;
 
   @Column(name = "user_id")
-  String userId;
+  UUID userId;
 
   @Column(name = "role_id")
-  String roleId;
+  UUID roleId;
 
 }

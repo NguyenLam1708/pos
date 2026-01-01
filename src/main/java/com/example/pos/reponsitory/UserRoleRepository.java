@@ -6,12 +6,13 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.List;
+import java.util.UUID;
 
 @ApplicationScoped
 public class UserRoleRepository
-        implements PanacheRepositoryBase<UserRole, String> {
+        implements PanacheRepositoryBase<UserRole, UUID> {
 
-    public Uni<List<String>> findRoleCodesByUserId(String userId) {
+    public Uni<List<String>> findRoleCodesByUserId(UUID userId) {
         return find("""
         select r.code
         from UserRole ur, Role r

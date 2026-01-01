@@ -6,19 +6,20 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @ApplicationScoped
 public class JwtService {
 
     public String generateToken(
-            String userId,
+            UUID userId,
             String email,
             List<String> roles,
             String phoneNumber
     ) {
 
         return Jwt.issuer("pos-app")
-                .subject(userId)
+                .subject(userId.toString())
                 .claim("email", email)
                 .claim("phoneNumber", phoneNumber)
                 .groups(Set.copyOf(roles))

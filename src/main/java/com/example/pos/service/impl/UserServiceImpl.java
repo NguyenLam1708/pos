@@ -1,7 +1,11 @@
 package com.example.pos.service.impl;
 
 import at.favre.lib.crypto.bcrypt.BCrypt;
+import com.example.pos.dto.request.ChangePasswordRequest;
 import com.example.pos.dto.request.CreateUserRequest;
+import com.example.pos.dto.request.UpdateUserRequest;
+import com.example.pos.dto.response.PageResponse;
+import com.example.pos.dto.response.UserResponse;
 import com.example.pos.entitiy.user.User;
 import com.example.pos.entitiy.user.UserRole;
 import com.example.pos.enums.user.UserStatus;
@@ -11,9 +15,13 @@ import com.example.pos.reponsitory.UserRepository;
 import com.example.pos.reponsitory.UserRoleRepository;
 import com.example.pos.service.UserService;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
+import io.quarkus.panache.common.Page;
+import io.quarkus.security.identity.SecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import java.util.UUID;
 
 @ApplicationScoped
 public class UserServiceImpl implements UserService {
@@ -27,9 +35,12 @@ public class UserServiceImpl implements UserService {
     @Inject
     UserRoleRepository userRoleRepository;
 
+    @Inject
+    SecurityIdentity identity;
+
     @Override
     @WithTransaction
-    public Uni<User> createUser(CreateUserRequest req) {
+    public Uni<UserResponse> createUser(CreateUserRequest req) {
 
         if (!req.getPassword().equals(req.getConfirmPassword())) {
             return Uni.createFrom()
@@ -60,13 +71,12 @@ public class UserServiceImpl implements UserService {
 
                     return userRepository.persist(user)
                             .flatMap(savedUser ->
-                                    // 2️⃣ lấy role STAFF
                                     roleRepository.findByCode("USER")
                                             .onItem().ifNull()
-                                            .failWith(() -> new BusinessException(500, "Default role USER not found"))
+                                            .failWith(() ->
+                                                    new BusinessException(500, "Default role USER not found"))
                                             .flatMap(role -> {
 
-                                                // 3️⃣ gán role cho user
                                                 UserRole userRole = new UserRole();
                                                 userRole.setUserId(savedUser.getId());
                                                 userRole.setRoleId(role.getId());
@@ -74,10 +84,175 @@ public class UserServiceImpl implements UserService {
                                                 return userRoleRepository.persist(userRole)
                                                         .replaceWith(savedUser);
                                             })
-                            );
+                            )
+                            .map(UserResponse::toUserResponse);
                 });
-
     }
+
+    @Override
+    public Uni<UserResponse> getMyInfo() {
+        UUID userId = UUID.fromString(identity.getPrincipal().getName());
+
+        return userRepository.findById(userId)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User not found"))
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    @WithTransaction
+    public Uni<UserResponse> changePassword(ChangePasswordRequest req) {
+
+        UUID userId = UUID.fromString(identity.getPrincipal().getName());
+
+        return userRepository.findById(userId)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User not found"))
+                .flatMap(user -> {
+
+                    var verified = BCrypt.verifyer()
+                            .verify(req.getOldPassword().toCharArray(), user.getPassword());
+
+                    if (!verified.verified) {
+                        return Uni.createFrom()
+                                .failure(new BusinessException(400, "Old password is incorrect"));
+                    }
+
+                    if (!req.getNewPassword().equals(req.getConfirmPassword())) {
+                        return Uni.createFrom()
+                                .failure(new BusinessException(400, "Password confirmation does not match"));
+                    }
+
+                    if (req.getNewPassword().equals(req.getOldPassword())) {
+                        return Uni.createFrom()
+                                .failure(new BusinessException(400, "New password can not same old password"));
+                    }
+                    String newHashedPassword = BCrypt.withDefaults()
+                            .hashToString(12, req.getNewPassword().toCharArray());
+
+                    user.setPassword(newHashedPassword);
+
+                    return userRepository.persist(user);
+                })
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    @WithTransaction
+    public Uni<UserResponse> updateInfo(UpdateUserRequest req) {
+
+        UUID userId = UUID.fromString(identity.getPrincipal().getName());
+
+        return userRepository.findById(userId)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User not found"))
+                .flatMap(user -> {
+
+                    user.setFirstName(req.getFirstName());
+                    user.setLastName(req.getLastName());
+                    user.setFullName(req.getFullName());
+                    user.setPhone(req.getPhone());
+                    user.setUsername(req.getUsername());
+
+                    return userRepository.persist(user);
+                })
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    public Uni<UserResponse> getUserById(UUID id){
+        return userRepository.findById(id)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User Not Found"))
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    @WithTransaction
+    public Uni<UserResponse> updateUser(UUID id, UpdateUserRequest req) {
+        return userRepository.findById(id)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User Not Found"))
+                .flatMap( user -> {
+
+                    user.setFirstName(req.getFirstName());
+                    user.setLastName(req.getLastName());
+                    user.setFullName(req.getFullName());
+                    user.setPhone(req.getPhone());
+                    user.setUsername(req.getUsername());
+
+                    return userRepository.persist(user);
+                })
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    @WithTransaction
+    public Uni<UserResponse> banUser(UUID id) {
+        return userRepository.findById(id)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User Not Found"))
+                .flatMap( user -> {
+
+                    user.setStatus(UserStatus.BANNED);
+
+                    return userRepository.persist(user);
+                })
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    @WithTransaction
+    public Uni<UserResponse> activeUser(UUID id) {
+        return userRepository.findById(id)
+                .onItem().ifNull()
+                .failWith(() -> new BusinessException(404, "User Not Found"))
+                .flatMap( user -> {
+
+                    user.setStatus(UserStatus.ACTIVE);
+
+                    return userRepository.persist(user);
+                })
+                .map(UserResponse::toUserResponse);
+    }
+
+    @Override
+    public Uni<PageResponse<UserResponse>> getUsers(int page, int size) {
+
+        int safeSize = Math.min(size, 50);
+
+        Uni<Long> countUni = userRepository.count();
+
+        Uni<java.util.List<UserResponse>> itemsUni =
+                userRepository.findAll()
+                        .page(Page.of(page, safeSize))
+                        .list()
+                        .map(list -> list.stream()
+                                .map(UserResponse::toUserResponse)
+                                .toList()
+                        );
+
+        return Uni.combine().all().unis(itemsUni, countUni)
+                .asTuple()
+                .map(tuple -> {
+                    var items = tuple.getItem1();
+                    long totalItems = tuple.getItem2();
+
+                    int totalPages = (int) Math.ceil((double) totalItems / safeSize);
+
+                    return PageResponse.<UserResponse>builder()
+                            .items(items)
+                            .page(page)
+                            .size(safeSize)
+                            .totalItems(totalItems)
+                            .totalPages(totalPages)
+                            .hasNext(page < totalPages - 1)
+                            .hasPrevious(page > 0)
+                            .build();
+                });
+    }
+
+
 
 
 }
