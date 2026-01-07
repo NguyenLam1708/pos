@@ -22,5 +22,4 @@ public class Category {
     UUID id;
 
     String name;
-    String description;
 }

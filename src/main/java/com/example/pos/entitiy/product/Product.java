@@ -10,7 +10,7 @@ import lombok.experimental.FieldDefaults;
 import java.util.UUID;
 
 @Entity
-@Table(name = "Product")
+@Table(name = "products")
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -20,6 +20,7 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.UUID )
     UUID id;
     String name;
-    String categoryId;
+    @Column(name = "category_id")
+    UUID categoryId;
     long price;
 }

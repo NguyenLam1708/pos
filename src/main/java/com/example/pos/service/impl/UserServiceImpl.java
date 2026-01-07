@@ -21,6 +21,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import java.util.List;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -219,40 +220,35 @@ public class UserServiceImpl implements UserService {
     @Override
     public Uni<PageResponse<UserResponse>> getUsers(int page, int size) {
 
-        int safeSize = Math.min(size, 50);
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 50);
 
-        Uni<Long> countUni = userRepository.count();
+        var query = userRepository.findAll();
 
-        Uni<java.util.List<UserResponse>> itemsUni =
-                userRepository.findAll()
-                        .page(Page.of(page, safeSize))
+        Uni<Long> countUni = query.count();
+
+        Uni<List<UserResponse>> itemsUni =
+                query.page(Page.of(safePage, safeSize))
                         .list()
                         .map(list -> list.stream()
                                 .map(UserResponse::toUserResponse)
-                                .toList()
-                        );
+                                .toList());
 
         return Uni.combine().all().unis(itemsUni, countUni)
                 .asTuple()
                 .map(tuple -> {
-                    var items = tuple.getItem1();
                     long totalItems = tuple.getItem2();
-
                     int totalPages = (int) Math.ceil((double) totalItems / safeSize);
 
                     return PageResponse.<UserResponse>builder()
-                            .items(items)
-                            .page(page)
+                            .items(tuple.getItem1())
+                            .page(safePage)
                             .size(safeSize)
                             .totalItems(totalItems)
                             .totalPages(totalPages)
-                            .hasNext(page < totalPages - 1)
-                            .hasPrevious(page > 0)
+                            .hasNext(safePage < totalPages - 1)
+                            .hasPrevious(safePage > 0)
                             .build();
                 });
     }
-
-
-
-
 }
