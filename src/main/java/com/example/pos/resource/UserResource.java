@@ -2,6 +2,7 @@ package com.example.pos.resource;
 
 import com.example.pos.dto.request.ChangePasswordRequest;
 import com.example.pos.dto.request.CreateUserRequest;
+import com.example.pos.dto.request.GetUsersRequest;
 import com.example.pos.dto.request.UpdateUserRequest;
 import com.example.pos.dto.response.ApiResponse;
 import com.example.pos.dto.response.UserResponse;
@@ -132,10 +133,10 @@ public class UserResource {
     @Operation(summary = "Get paginated users", description = "Retrieve a paginated list of users. Only ADMIN can perform this action.")
     @APIResponse(responseCode = "200", description = "Users retrieved successfully")
     public Uni<Response> getUsers(
-            @Parameter(description = "Page number, starting from 0") @QueryParam("page") @DefaultValue("0") int page,
-            @Parameter(description = "Number of users per page") @QueryParam("size") @DefaultValue("10") int size
+            @BeanParam GetUsersRequest request
     ) {
-        return userService.getUsers(page, size)
+        return userService
+                .getUsers(request.getPage(), request.getSize())
                 .map(pageResult -> Response.ok(ApiResponse.success(pageResult)).build());
     }
 }

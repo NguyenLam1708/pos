@@ -1,5 +1,6 @@
 package com.example.pos.resource;
 
+import com.example.pos.dto.request.GetProductRequest;
 import com.example.pos.dto.response.ApiResponse;
 import com.example.pos.service.ProductService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
@@ -36,13 +37,10 @@ public class ProductResource {
     )
     @APIResponse(responseCode = "200", description = "Products retrieved successfully")
     public Uni<Response> getProducts(
-            @Parameter(description = "Page number, starting from 0")
-            @QueryParam("page") @DefaultValue("0") int page,
-
-            @Parameter(description = "Number of products per page")
-            @QueryParam("size") @DefaultValue("10") int size
+            @BeanParam GetProductRequest request
     ) {
-        return productService.getProducts(page, size)
+        return productService
+                .getProducts(request.getPage(), request.getSize())
                 .map(result -> Response.ok(ApiResponse.success(result)).build());
     }
 
