@@ -14,6 +14,7 @@ import com.example.pos.service.impl.image.ImageResizeService;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.panache.common.Page;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 @ApplicationScoped
 public class ProductServiceImpl implements ProductService {
@@ -127,7 +129,7 @@ public class ProductServiceImpl implements ProductService {
                 });
     }
 
-    @WithTransaction
+    @Override
     public Uni<ProductResponse> uploadProductImage(
             UUID productId,
             ImageUploadForm form
@@ -137,53 +139,55 @@ public class ProductServiceImpl implements ProductService {
                 .onItem().ifNull().failWith(
                         new BusinessException(404, "Product not found")
                 )
-                .flatMap(product -> {
+                .flatMap(product ->
 
-                    // 1️⃣ Đọc multipart file → byte[]
-                    byte[] original;
-                    try {
-                        original = Files.readAllBytes(
-                                form.file.uploadedFile()
-                        );
-                    } catch (IOException e) {
-                        return Uni.createFrom().failure(
-                                new BusinessException(400, "Invalid image file")
-                        );
-                    }
+                        Uni.createFrom().item(() -> {
+                                    try {
 
-                    // 2️⃣ Path WebP
-                    String imagePath =
-                            "products/" + productId + "/image.webp";
-                    String thumbPath =
-                            "products/" + productId + "/thumbnail.webp";
+                                        byte[] original = Files.readAllBytes(
+                                                form.file.uploadedFile()
+                                        );
 
-                    // 3️⃣ Resize + convert WebP
-                    byte[] imageWebp =
-                            imageResizeService.resizeToWebp(original, 1024, 1024);
+                                        byte[] imageWebp =
+                                                imageResizeService.resizeToWebp(original, 1024, 1024);
 
-                    byte[] thumbWebp =
-                            imageResizeService.resizeToWebp(original, 300, 300);
+                                        byte[] thumbWebp =
+                                                imageResizeService.resizeToWebp(original, 300, 300);
 
-                    // 4️⃣ Upload
-                    return fileStorageService.upload(
-                                    imageWebp,
-                                    imagePath,
-                                    "image/webp"
-                            )
-                            .flatMap(imageUrl ->
-                                    fileStorageService.upload(
-                                                    thumbWebp,
-                                                    thumbPath,
-                                                    "image/webp"
-                                            )
-                                            .invoke(thumbUrl -> {
-                                                product.setImageUrl(imageUrl);
-                                                product.setThumbnailUrl(thumbUrl);
-                                            })
-                            )
-                            // 5️⃣ Persist
-                            .flatMap(v -> productRepository.persist(product));
-                })
+                                        return Map.of(
+                                                "image", imageWebp,
+                                                "thumb", thumbWebp
+                                        );
+
+                                    } catch (IOException e) {
+                                        throw new RuntimeException("Cannot read uploaded image file", e);
+                                    }
+
+                                }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+
+                                .flatMap(map ->
+                                        fileStorageService.upload(
+                                                        map.get("image"),
+                                                        "products/" + productId + "/image.webp",
+                                                        "image/webp"
+                                                )
+                                                .flatMap(imageUrl ->
+                                                        fileStorageService.upload(
+                                                                        map.get("thumb"),
+                                                                        "products/" + productId + "/thumbnail.webp",
+                                                                        "image/webp"
+                                                                )
+                                                                .invoke(thumbUrl -> {
+                                                                    product.setImageUrl(imageUrl);
+                                                                    product.setThumbnailUrl(thumbUrl);
+                                                                })
+                                                )
+                                )
+
+                                .flatMap(v ->
+                                        productRepository.persist(product)
+                                )
+                )
                 .map(ProductResponse::from);
     }
 

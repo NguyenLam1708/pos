@@ -4,6 +4,7 @@ import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import io.quarkus.arc.profile.IfBuildProfile;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -40,15 +41,16 @@ public class CloudinaryStorageService implements FileStorageService {
 
     @Override
     public Uni<String> upload(byte[] data, String path, String contentType) {
-
         return Uni.createFrom().item(() -> {
             try {
 
-                // ✅ public_id KHÔNG có extension
+                if (data == null || data.length == 0) {
+                    throw new IllegalArgumentException("Image data is empty");
+                }
+
                 String publicId = path
-                        .replace(".webp", "")
-                        .replace(".png", "")
-                        .replace(".jpg", "");
+                        .replaceAll(".*/", "")
+                        .replaceAll("\\.(png|jpg|jpeg|webp)$", "");
 
                 Map<?, ?> result = cloudinary.uploader().upload(
                         data,
@@ -56,6 +58,7 @@ public class CloudinaryStorageService implements FileStorageService {
                                 "folder", baseFolder,
                                 "public_id", publicId,
                                 "resource_type", "image",
+                                "format", "webp",
                                 "overwrite", true
                         )
                 );
@@ -63,9 +66,12 @@ public class CloudinaryStorageService implements FileStorageService {
                 return result.get("secure_url").toString();
 
             } catch (Exception e) {
-                throw new RuntimeException("Upload image to Cloudinary failed", e);
+                e.printStackTrace(); // 👈 RẤT QUAN TRỌNG
+                throw new RuntimeException("Cloudinary upload failed: " + e.getMessage(), e);
             }
-        });
+        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
+
+
 
 }
