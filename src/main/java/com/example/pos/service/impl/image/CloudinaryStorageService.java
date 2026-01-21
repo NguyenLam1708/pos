@@ -58,7 +58,7 @@ public class CloudinaryStorageService implements FileStorageService {
                                 "folder", baseFolder,
                                 "public_id", publicId,
                                 "resource_type", "image",
-                                "format", "webp",
+                                "format", "webp",          // 🔥 Cloudinary convert
                                 "overwrite", true
                         )
                 );

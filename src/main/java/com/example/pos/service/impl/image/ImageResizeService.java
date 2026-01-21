@@ -9,14 +9,14 @@ import java.io.ByteArrayOutputStream;
 @ApplicationScoped
 public class ImageResizeService {
 
-    public byte[] resizeToWebp(byte[] original, int width, int height) {
+    public byte[] resize(byte[] original, int width, int height) {
         try (
                 ByteArrayInputStream in = new ByteArrayInputStream(original);
                 ByteArrayOutputStream out = new ByteArrayOutputStream()
         ) {
             Thumbnails.of(in)
                     .size(width, height)
-                    .outputFormat("webp")
+                    .outputFormat("jpg") // 🔥 JPG
                     .outputQuality(0.85f)
                     .toOutputStream(out);
 
