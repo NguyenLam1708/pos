@@ -130,24 +130,29 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    @WithTransaction
     public Uni<ProductResponse> uploadProductImage(
             UUID productId,
             ImageUploadForm form
     ) {
-        return processAndUploadImages(productId, form)
+        return processAndUploadImages(productId, form)   // CLOUD
                 .flatMap(urls ->
-                        productRepository.findById(productId)
-                                .onItem().ifNull().failWith(
-                                        new BusinessException(404, "Product not found")
-                                )
-                                .invoke(product -> {
-                                    product.setImageUrl(urls.get("imageUrl"));
-                                    product.setThumbnailUrl(urls.get("thumbUrl"));
-                                })
+                        updateProductImages(productId, urls) // DB
                 )
                 .map(ProductResponse::from);
     }
+
+    @WithTransaction
+    Uni<Product> updateProductImages(UUID productId, Map<String, String> urls) {
+        return productRepository.findById(productId)
+                .onItem().ifNull().failWith(
+                        new BusinessException(404, "Product not found")
+                )
+                .invoke(product -> {
+                    product.setImageUrl(urls.get("imageUrl"));
+                    product.setThumbnailUrl(urls.get("thumbUrl"));
+                });
+    }
+
     @Override
     public Uni<Void> deleteProductImage(UUID productId) {
         return detachProductImages(productId)
