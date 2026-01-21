@@ -148,15 +148,15 @@ public class ProductServiceImpl implements ProductService {
                                                 form.file.uploadedFile()
                                         );
 
-                                        byte[] imageWebp =
-                                                imageResizeService.resizeToWebp(original, 1024, 1024);
+                                        byte[] image =
+                                                imageResizeService.resizeToJpeg(original, 1024, 1024);
 
-                                        byte[] thumbWebp =
-                                                imageResizeService.resizeToWebp(original, 300, 300);
+                                        byte[] thumb =
+                                                imageResizeService.resizeToJpeg(original, 300, 300);
 
                                         return Map.of(
-                                                "image", imageWebp,
-                                                "thumb", thumbWebp
+                                                "image", image,
+                                                "thumb", thumb
                                         );
 
                                     } catch (IOException e) {
