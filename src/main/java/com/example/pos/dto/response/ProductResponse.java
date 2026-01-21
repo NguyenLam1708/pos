@@ -1,6 +1,6 @@
 package com.example.pos.dto.response;
 
-import com.example.pos.entitiy.product.Product;
+import com.example.pos.entity.product.Product;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,6 +13,8 @@ public class ProductResponse {
     String name;
     UUID categoryId;
     long price;
+    String imageUrl;
+    String thumbnailUrl;
 
     public static ProductResponse from(Product product) {
         return ProductResponse.builder()
@@ -20,6 +22,8 @@ public class ProductResponse {
                 .name(product.getName())
                 .categoryId(product.getCategoryId())
                 .price(product.getPrice())
+                .imageUrl(product.getImageUrl())
+                .thumbnailUrl(product.getThumbnailUrl())
                 .build();
     }
 }

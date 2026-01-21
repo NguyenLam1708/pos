@@ -1,6 +1,6 @@
 package com.example.pos.dto.response;
 
-import com.example.pos.entitiy.category.Category;
+import com.example.pos.entity.category.Category;
 import lombok.Builder;
 import lombok.Data;
 

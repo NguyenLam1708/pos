@@ -1,6 +1,8 @@
 package com.example.pos.enums.order;
 
 public enum OrderStatus {
-    PENDING,
-    DONE
+    OPEN,     // đang gọi món
+    CONFIRMED,
+    PAID,        // đã thanh toán
+    CANCELLED
 }

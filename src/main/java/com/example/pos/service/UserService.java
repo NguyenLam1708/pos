@@ -5,6 +5,7 @@ import com.example.pos.dto.request.CreateUserRequest;
 import com.example.pos.dto.request.UpdateUserRequest;
 import com.example.pos.dto.response.PageResponse;
 import com.example.pos.dto.response.UserResponse;
+import com.example.pos.enums.user.UserStatus;
 import io.smallrye.mutiny.Uni;
 
 import java.util.UUID;

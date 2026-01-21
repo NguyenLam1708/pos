@@ -1,6 +1,6 @@
 package com.example.pos.dto.response;
 
-import com.example.pos.entitiy.user.User;
+import com.example.pos.entity.user.User;
 import com.example.pos.enums.user.UserStatus;
 import lombok.Builder;
 import lombok.Data;

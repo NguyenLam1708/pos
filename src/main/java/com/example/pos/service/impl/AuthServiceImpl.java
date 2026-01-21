@@ -5,14 +5,13 @@ import com.example.pos.dto.request.LoginRequest;
 import com.example.pos.dto.response.LoginResponse;
 import com.example.pos.enums.user.UserStatus;
 import com.example.pos.exception.BusinessException;
-import com.example.pos.reponsitory.UserRepository;
-import com.example.pos.reponsitory.UserRoleRepository;
+import com.example.pos.repository.UserRepository;
+import com.example.pos.repository.UserRoleRepository;
 import com.example.pos.service.AuthService;
 import com.example.pos.service.JwtService;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
 @ApplicationScoped

@@ -2,10 +2,9 @@ package com.example.pos.resource;
 
 import com.example.pos.dto.request.ChangePasswordRequest;
 import com.example.pos.dto.request.CreateUserRequest;
-import com.example.pos.dto.request.GetUsersRequest;
 import com.example.pos.dto.request.UpdateUserRequest;
 import com.example.pos.dto.response.ApiResponse;
-import com.example.pos.dto.response.UserResponse;
+import com.example.pos.enums.user.UserStatus;
 import com.example.pos.service.UserService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.smallrye.mutiny.Uni;
@@ -69,8 +68,16 @@ public class UserResource {
     @POST
     @WithSession
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Create a new user", description = "Create a new user. Only ADMIN role can perform this action.")
+    @Tag(
+            name = "User - Admin",
+            description = "Admin-only user management APIs"
+    )
+    @Operation(
+            summary = "Create a new user",
+            description = "Create a new user account. Admin only."
+    )
     @APIResponse(responseCode = "201", description = "User created successfully")
+    @APIResponse(responseCode = "403", description = "Access denied")
     public Uni<Response> createUser(@Valid CreateUserRequest req) {
         return userService.createUser(req)
                 .map(user -> Response.status(Response.Status.CREATED)
@@ -82,10 +89,15 @@ public class UserResource {
     @Path("/{id}")
     @RolesAllowed("ADMIN")
     @WithSession
-    @Operation(summary = "Get user by ID", description = "Retrieve a user by their UUID. Only ADMIN can perform this action.")
-    @APIResponse(responseCode = "200", description = "User retrieved successfully")
+    @Tag(name = "User - Admin")
+    @Operation(
+            summary = "Get user by ID",
+            description = "Retrieve a user by UUID. Admin only."
+    )
     public Uni<Response> getUserById(
-            @Parameter(description = "UUID of the user to retrieve") @PathParam("id") UUID id) {
+            @Parameter(description = "UUID of the user to retrieve")
+            @PathParam("id") UUID id
+    ) {
         return userService.getUserById(id)
                 .map(user -> Response.ok(ApiResponse.success(user)).build());
     }
@@ -94,11 +106,16 @@ public class UserResource {
     @Path("/{id}")
     @WithSession
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Update user by ID", description = "Update information for a specific user. Only ADMIN can perform this action.")
-    @APIResponse(responseCode = "200", description = "User updated successfully")
+    @Tag(name = "User - Admin")
+    @Operation(
+            summary = "Update user",
+            description = "Update user information by ID. Admin only."
+    )
     public Uni<Response> updateUser(
-            @Parameter(description = "UUID of the user to update") @PathParam("id") UUID id,
-            @Valid UpdateUserRequest req) {
+            @Parameter(description = "UUID of the user to update")
+            @PathParam("id") UUID id,
+            @Valid UpdateUserRequest req
+    ) {
         return userService.updateUser(id, req)
                 .map(user -> Response.ok(ApiResponse.success(user)).build());
     }
@@ -107,10 +124,12 @@ public class UserResource {
     @Path("/{id}/ban")
     @WithSession
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Ban user", description = "Ban a specific user. Only ADMIN can perform this action.")
-    @APIResponse(responseCode = "200", description = "User banned successfully")
-    public Uni<Response> banUser(
-            @Parameter(description = "UUID of the user to ban") @PathParam("id") UUID id) {
+    @Tag(name = "User - Admin")
+    @Operation(
+            summary = "Ban user",
+            description = "Disable a user account. Admin only."
+    )
+    public Uni<Response> banUser(@PathParam("id") UUID id) {
         return userService.banUser(id)
                 .map(user -> Response.ok(ApiResponse.success(user)).build());
     }
@@ -119,10 +138,12 @@ public class UserResource {
     @Path("/{id}/active")
     @WithSession
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Activate user", description = "Activate a specific user. Only ADMIN can perform this action.")
-    @APIResponse(responseCode = "200", description = "User activated successfully")
-    public Uni<Response> activeUser(
-            @Parameter(description = "UUID of the user to activate") @PathParam("id") UUID id) {
+    @Tag(name = "User - Admin")
+    @Operation(
+            summary = "Activate user",
+            description = "Re-activate a user account. Admin only."
+    )
+    public Uni<Response> activeUser(@PathParam("id") UUID id) {
         return userService.activeUser(id)
                 .map(user -> Response.ok(ApiResponse.success(user)).build());
     }
@@ -130,13 +151,18 @@ public class UserResource {
     @GET
     @RolesAllowed("ADMIN")
     @WithSession
-    @Operation(summary = "Get paginated users", description = "Retrieve a paginated list of users. Only ADMIN can perform this action.")
-    @APIResponse(responseCode = "200", description = "Users retrieved successfully")
+    @Tag(name = "User - Admin")
+    @Operation(
+            summary = "Get paginated users",
+            description = "Retrieve paginated list of users. Admin only."
+    )
     public Uni<Response> getUsers(
-            @BeanParam GetUsersRequest request
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("size") @DefaultValue("10") int size
     ) {
         return userService
-                .getUsers(request.getPage(), request.getSize())
+                .getUsers(page, size)
                 .map(pageResult -> Response.ok(ApiResponse.success(pageResult)).build());
     }
+
 }
