@@ -2,6 +2,7 @@ package com.example.pos.service.impl.image;
 
 import io.quarkus.arc.profile.IfBuildProfile;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.nio.file.Files;
@@ -33,4 +34,20 @@ public class LocalStorageService implements FileStorageService {
             }
         });
     }
+
+    @Override
+    public Uni<Void> delete(String path) {
+
+        return Uni.createFrom().<Void>nullItem()
+                .invoke(() -> {
+                    try {
+                        Path filePath = ROOT.resolve(path);
+                        Files.deleteIfExists(filePath);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Local file delete failed", e);
+                    }
+                })
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
 }
