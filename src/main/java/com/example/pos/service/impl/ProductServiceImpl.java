@@ -199,12 +199,38 @@ public class ProductServiceImpl implements ProductService {
                 .onItem().ifNull().failWith(
                         new BusinessException(404, "Product not found")
                 )
-                .invoke(product -> {
-                    product.setImageUrl(null);
-                    product.setThumbnailUrl(null);
+                .flatMap(product -> {
+
+                    String imagePublicId = extractPublicId(product.getImageUrl());
+                    String thumbPublicId = extractPublicId(product.getThumbnailUrl());
+
+                    Uni<Void> deleteImage =
+                            imagePublicId != null
+                                    ? fileStorageService.delete(imagePublicId)
+                                    : Uni.createFrom().nullItem();
+
+                    Uni<Void> deleteThumb =
+                            thumbPublicId != null
+                                    ? fileStorageService.delete(thumbPublicId)
+                                    : Uni.createFrom().nullItem();
+
+                    return Uni.combine().all().unis(deleteImage, deleteThumb)
+                            .discardItems()
+                            .invoke(() -> {
+                                product.setImageUrl(null);
+                                product.setThumbnailUrl(null);
+                            });
                 })
                 .replaceWithVoid();
     }
 
+    private String extractPublicId(String url) {
+        if (url == null) return null;
+
+        return url
+                .substring(url.indexOf("/upload/") + 8)
+                .replaceAll("^v\\d+/", "")
+                .replaceAll("\\.(jpg|jpeg|png|webp)$", "");
+    }
 
 }

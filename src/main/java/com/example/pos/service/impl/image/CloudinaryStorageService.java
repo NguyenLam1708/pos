@@ -42,23 +42,21 @@ public class CloudinaryStorageService implements FileStorageService {
     @Override
     public Uni<String> upload(byte[] data, String path, String contentType) {
         return Uni.createFrom().item(() -> {
+
+            if (data == null || data.length == 0) {
+                throw new IllegalArgumentException("Image data is empty");
+            }
+
+            String publicId = path
+                    .replaceAll(".*/", "")
+                    .replaceAll("\\.(png|jpg|jpeg|webp)$", "");
+
             try {
-
-                if (data == null || data.length == 0) {
-                    throw new IllegalArgumentException("Image data is empty");
-                }
-
-                String publicId = path
-                        .replaceAll(".*/", "")
-                        .replaceAll("\\.(png|jpg|jpeg|webp)$", "");
-
                 Map<?, ?> result = cloudinary.uploader().upload(
                         data,
                         ObjectUtils.asMap(
                                 "folder", baseFolder,
                                 "public_id", publicId,
-                                "resource_type", "image",
-                                "format", "webp",          // 🔥 Cloudinary convert
                                 "overwrite", true
                         )
                 );
@@ -66,12 +64,27 @@ public class CloudinaryStorageService implements FileStorageService {
                 return result.get("secure_url").toString();
 
             } catch (Exception e) {
-                e.printStackTrace(); // 👈 RẤT QUAN TRỌNG
-                throw new RuntimeException("Cloudinary upload failed: " + e.getMessage(), e);
+                throw new RuntimeException("Cloudinary upload failed", e);
             }
+
         }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
-
+    @Override
+    public Uni<Void> delete(String publicId) {
+        return Uni.createFrom().item(publicId)
+                .invoke(id -> {
+                    try {
+                        cloudinary.uploader().destroy(
+                                id,
+                                ObjectUtils.asMap("resource_type", "image")
+                        );
+                    } catch (Exception e) {
+                        throw new RuntimeException("Cloudinary delete failed", e);
+                    }
+                })
+                .replaceWithVoid()
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
 
 }

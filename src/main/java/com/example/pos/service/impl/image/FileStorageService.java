@@ -9,4 +9,6 @@ public interface FileStorageService {
             String path,
             String contentType
     );
+
+    Uni<Void> delete(String publicId);
 }
