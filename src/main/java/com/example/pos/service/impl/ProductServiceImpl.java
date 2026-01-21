@@ -130,98 +130,92 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @WithTransaction
     public Uni<ProductResponse> uploadProductImage(
             UUID productId,
             ImageUploadForm form
     ) {
-
-        return productRepository.findById(productId)
-                .onItem().ifNull().failWith(
-                        new BusinessException(404, "Product not found")
-                )
-                .flatMap(product ->
-
-                        Uni.createFrom().item(() -> {
-                                    try {
-
-                                        byte[] original = Files.readAllBytes(
-                                                form.file.uploadedFile()
-                                        );
-
-                                        byte[] image =
-                                                imageResizeService.resizeToJpeg(original, 1024, 1024);
-
-                                        byte[] thumb =
-                                                imageResizeService.resizeToJpeg(original, 300, 300);
-
-                                        return Map.of(
-                                                "image", image,
-                                                "thumb", thumb
-                                        );
-
-                                    } catch (IOException e) {
-                                        throw new RuntimeException("Cannot read uploaded image file", e);
-                                    }
-
-                                }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-
-                                .flatMap(map ->
-                                        fileStorageService.upload(
-                                                        map.get("image"),
-                                                        "products/" + productId + "/image.webp",
-                                                        "image/webp"
-                                                )
-                                                .flatMap(imageUrl ->
-                                                        fileStorageService.upload(
-                                                                        map.get("thumb"),
-                                                                        "products/" + productId + "/thumbnail.webp",
-                                                                        "image/webp"
-                                                                )
-                                                                .invoke(thumbUrl -> {
-                                                                    product.setImageUrl(imageUrl);
-                                                                    product.setThumbnailUrl(thumbUrl);
-                                                                })
-                                                )
+        return processAndUploadImages(productId, form)
+                .flatMap(urls ->
+                        productRepository.findById(productId)
+                                .onItem().ifNull().failWith(
+                                        new BusinessException(404, "Product not found")
                                 )
-
-                                .flatMap(v ->
-                                        productRepository.persist(product)
-                                )
+                                .invoke(product -> {
+                                    product.setImageUrl(urls.get("imageUrl"));
+                                    product.setThumbnailUrl(urls.get("thumbUrl"));
+                                })
                 )
                 .map(ProductResponse::from);
     }
-
     @Override
-    @WithTransaction
     public Uni<Void> deleteProductImage(UUID productId) {
+        return detachProductImages(productId)
+                .flatMap(ids ->
+                        Uni.combine().all().unis(
+                                ids.get("image") != null
+                                        ? fileStorageService.delete(ids.get("image"))
+                                        : Uni.createFrom().voidItem(),
+                                ids.get("thumb") != null
+                                        ? fileStorageService.delete(ids.get("thumb"))
+                                        : Uni.createFrom().voidItem()
+                        ).discardItems()
+                );
+    }
 
+    @WithTransaction
+    public Uni<Map<String, String>> detachProductImages(UUID productId) {
         return productRepository.findById(productId)
-                .onItem().ifNull().failWith(
-                        new BusinessException(404, "Product not found")
-                )
-                .flatMap(product -> {
+                .onItem().ifNull().failWith(new BusinessException(404, "Product not found"))
+                .map(product -> {
+                    Map<String, String> ids = Map.of(
+                            "image", extractPublicId(product.getImageUrl()),
+                            "thumb", extractPublicId(product.getThumbnailUrl())
+                    );
+                    product.setImageUrl(null);
+                    product.setThumbnailUrl(null);
+                    return ids;
+                });
+    }
 
-                    String imagePublicId = extractPublicId(product.getImageUrl());
-                    String thumbPublicId = extractPublicId(product.getThumbnailUrl());
+    private Uni<Map<String, String>> processAndUploadImages(
+            UUID productId,
+            ImageUploadForm form
+    ) {
+        return Uni.createFrom().item(() -> {
+                    try {
+                        byte[] original = Files.readAllBytes(form.file.uploadedFile());
 
-                    Uni<Void> deleteImage =
-                            imagePublicId != null
-                                    ? fileStorageService.delete(imagePublicId)
-                                    : Uni.createFrom().nullItem();
+                        byte[] image = imageResizeService.resizeToJpeg(original, 1024, 1024);
+                        byte[] thumb = imageResizeService.resizeToJpeg(original, 300, 300);
 
-                    Uni<Void> deleteThumb =
-                            thumbPublicId != null
-                                    ? fileStorageService.delete(thumbPublicId)
-                                    : Uni.createFrom().nullItem();
-
-                    return Uni.combine().all().unis(deleteImage, deleteThumb)
-                            .discardItems()
-                            .invoke(() -> {
-                                product.setImageUrl(null);
-                                product.setThumbnailUrl(null);
-                            });
+                        return Map.of(
+                                "image", image,
+                                "thumb", thumb
+                        );
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 })
-                .replaceWithVoid();
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                .flatMap(map ->
+                        fileStorageService.upload(
+                                map.get("image"),
+                                "products/" + productId + "/image.webp",
+                                "image/webp"
+                        ).flatMap(imageUrl ->
+                                fileStorageService.upload(
+                                        map.get("thumb"),
+                                        "products/" + productId + "/thumbnail.webp",
+                                        "image/webp"
+                                ).map(thumbUrl ->
+                                        Map.of(
+                                                "imageUrl", imageUrl,
+                                                "thumbUrl", thumbUrl
+                                        )
+                                )
+                        )
+                );
     }
 
     private String extractPublicId(String url) {
