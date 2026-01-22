@@ -6,6 +6,7 @@ import com.example.pos.dto.request.UpdateProductRequest;
 import com.example.pos.dto.response.ApiResponse;
 import com.example.pos.service.ProductService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
+import io.smallrye.common.annotation.Blocking;
 import io.smallrye.common.annotation.NonBlocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.RolesAllowed;
@@ -160,18 +161,17 @@ public class  ProductResource {
 
     @POST
     @Path("/{id}/image")
-    @WithSession
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @NonBlocking
+    @Blocking
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
             summary = "Upload product image",
             description = """
-            Admin only.
-            Upload or replace product image.
-            Image will be converted to WebP and a thumbnail will be generated.
-            """
+        Admin only.
+        Upload or replace product image.
+        Image will be converted to WebP and a thumbnail will be generated.
+        """
     )
     @APIResponse(responseCode = "200", description = "Image uploaded successfully")
     @APIResponse(responseCode = "404", description = "Product not found")
@@ -188,16 +188,15 @@ public class  ProductResource {
 
     @DELETE
     @Path("/{id}/image")
-    @WithSession
     @NonBlocking
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
             summary = "Delete product image",
             description = """
-            Admin only.
-            Remove product image and thumbnail.
-            """
+        Admin only.
+        Remove product image and thumbnail.
+        """
     )
     @APIResponse(responseCode = "204", description = "Image deleted")
     @APIResponse(responseCode = "403", description = "Access denied")
@@ -209,4 +208,5 @@ public class  ProductResource {
                 .deleteProductImage(id)
                 .replaceWith(Response.noContent().build());
     }
+
 }
