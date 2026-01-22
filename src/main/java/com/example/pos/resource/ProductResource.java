@@ -6,6 +6,7 @@ import com.example.pos.dto.request.UpdateProductRequest;
 import com.example.pos.dto.response.ApiResponse;
 import com.example.pos.service.ProductService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
+import io.smallrye.common.annotation.NonBlocking;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -161,6 +162,7 @@ public class  ProductResource {
     @Path("/{id}/image")
     @WithSession
     @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @NonBlocking
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
@@ -187,6 +189,7 @@ public class  ProductResource {
     @DELETE
     @Path("/{id}/image")
     @WithSession
+    @NonBlocking
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
