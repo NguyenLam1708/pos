@@ -43,12 +43,8 @@ public class CloudinaryStorageService implements FileStorageService {
     public Uni<String> upload(byte[] data, String path, String contentType) {
         return Uni.createFrom().item(() -> {
 
-            String fileName = path
-                    .replaceAll(".*/", "")
-                    .replaceAll("\\.(png|jpg|jpeg|webp)$", "");
-
-            String fullPublicId = baseFolder + "/" + fileName;
-            // pos/products/image
+            String cleanPath = path.replaceAll("\\.(png|jpg|jpeg|webp)$", "");
+            String fullPublicId = baseFolder + "/" + cleanPath;
 
             try {
                 Map<?, ?> result = cloudinary.uploader().upload(

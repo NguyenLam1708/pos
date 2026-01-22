@@ -206,12 +206,12 @@ public class ProductServiceImpl implements ProductService {
                 .flatMap(map ->
                         fileStorageService.upload(
                                 map.get("image"),
-                                "products/" + productId + "/image.webp",
+                                "products/" + productId + "/image",
                                 "image/webp"
                         ).flatMap(imageUrl ->
                                 fileStorageService.upload(
                                         map.get("thumb"),
-                                        "products/" + productId + "/thumbnail.webp",
+                                        "products/" + productId + "/thumbnail",
                                         "image/webp"
                                 ).map(thumbUrl ->
                                         Map.of(
