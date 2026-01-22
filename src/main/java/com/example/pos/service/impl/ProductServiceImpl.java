@@ -183,7 +183,7 @@ public class ProductServiceImpl implements ProductService {
                 });
     }
 
-    private Uni<Map<String, String>> processAndUploadImages(
+private Uni<Map<String, String>> processAndUploadImages(
             UUID productId,
             ImageUploadForm form
     ) {
@@ -206,12 +206,12 @@ public class ProductServiceImpl implements ProductService {
                 .flatMap(map ->
                         fileStorageService.upload(
                                 map.get("image"),
-                                "products/" + productId + "/image",
+                                productId + "/image",
                                 "image/webp"
                         ).flatMap(imageUrl ->
                                 fileStorageService.upload(
                                         map.get("thumb"),
-                                        "products/" + productId + "/thumbnail",
+                                        productId + "/thumbnail",
                                         "image/webp"
                                 ).map(thumbUrl ->
                                         Map.of(
