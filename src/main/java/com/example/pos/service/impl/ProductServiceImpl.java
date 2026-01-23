@@ -132,16 +132,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public Uni<ProductResponse> uploadProductImage(UUID productId, ImageUploadForm form) {
 
-        // 1️⃣ BLOCKING – chạy worker thread
-        return Uni.createFrom().item(() ->
-                        uploadImagesBlocking(productId, form)
-                )
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+        // 1️⃣ BLOCKING: resize + upload cloudinary → WORKER THREAD
+        Uni<Map<String, String>> uploadUni =
+                Uni.createFrom().item(() -> uploadImagesBlocking(productId, form))
+                        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
 
-                // 2️⃣ QUAY VỀ EVENT LOOP → DB
-                .flatMap(urls ->
-                        updateProductImages(productId, urls)
-                )
+        // 2️⃣ EVENT LOOP: mở transaction & update DB
+        return uploadUni
+                .flatMap(urls -> updateProductImagesTx(productId, urls))
                 .map(ProductResponse::from);
     }
 
@@ -149,8 +147,9 @@ public class ProductServiceImpl implements ProductService {
             UUID productId,
             ImageUploadForm form
     ) {
-        try {
-            byte[] original = Files.readAllBytes(form.file.uploadedFile());
+        try (var is = Files.newInputStream(form.file.uploadedFile())) {
+
+            byte[] original = is.readAllBytes();
 
             byte[] image = imageResizeService.resizeToJpeg(original, 1024, 1024);
             byte[] thumb = imageResizeService.resizeToJpeg(original, 300, 300);
@@ -165,13 +164,17 @@ public class ProductServiceImpl implements ProductService {
                     "imageUrl", imageUrl,
                     "thumbUrl", thumbUrl
             );
-        } catch (IOException e) {
-            throw new RuntimeException("Read image failed", e);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Upload image failed", e);
         }
     }
 
     @WithTransaction
-    Uni<Product> updateProductImages(UUID productId, Map<String, String> urls) {
+    Uni<Product> updateProductImagesTx(
+            UUID productId,
+            Map<String, String> urls
+    ) {
         return productRepository.findById(productId)
                 .onItem().ifNull().failWith(
                         new BusinessException(404, "Product not found")
@@ -185,34 +188,39 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public Uni<Void> deleteProductImage(UUID productId) {
 
-        return detachProductImages(productId)
+        return detachProductImagesTx(productId)
 
-                // chạy delete cloudinary trên worker
+                // BLOCKING delete cloudinary → worker
                 .flatMap(ids ->
-                        Uni.createFrom().voidItem()
-                                .invoke(() -> {
-                                    if (ids.get("image") != null) {
-                                        fileStorageService.deleteBlocking(ids.get("image"));
-                                    }
-                                    if (ids.get("thumb") != null) {
-                                        fileStorageService.deleteBlocking(ids.get("thumb"));
-                                    }
-                                })
-                                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                );
+                        Uni.createFrom().item(() -> {
+                            if (ids.get("image") != null) {
+                                fileStorageService.deleteBlocking(ids.get("image"));
+                            }
+                            if (ids.get("thumb") != null) {
+                                fileStorageService.deleteBlocking(ids.get("thumb"));
+                            }
+                            return null;
+                        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                )
+                .replaceWithVoid();
     }
 
     @WithTransaction
-    public Uni<Map<String, String>> detachProductImages(UUID productId) {
+    Uni<Map<String, String>> detachProductImagesTx(UUID productId) {
+
         return productRepository.findById(productId)
-                .onItem().ifNull().failWith(new BusinessException(404, "Product not found"))
+                .onItem().ifNull()
+                .failWith(new BusinessException(404, "Product not found"))
                 .map(product -> {
+
                     Map<String, String> ids = Map.of(
                             "image", extractPublicId(product.getImageUrl()),
                             "thumb", extractPublicId(product.getThumbnailUrl())
                     );
+
                     product.setImageUrl(null);
                     product.setThumbnailUrl(null);
+
                     return ids;
                 });
     }
