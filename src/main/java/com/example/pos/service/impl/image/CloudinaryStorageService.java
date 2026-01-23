@@ -39,45 +39,32 @@ public class CloudinaryStorageService implements FileStorageService {
         ));
     }
 
-    @Override
-    public Uni<String> upload(byte[] data, String path, String contentType) {
-        return Uni.createFrom().item(() -> {
-
-            String cleanPath = path.replaceAll("\\.(png|jpg|jpeg|webp)$", "");
-            String fullPublicId = baseFolder + "/" + cleanPath;
-
-            try {
-                Map<?, ?> result = cloudinary.uploader().upload(
-                        data,
-                        ObjectUtils.asMap(
-                                "public_id", fullPublicId,
-                                "overwrite", true,
-                                "resource_type", "image"
-                        )
-                );
-
-                return result.get("secure_url").toString();
-
-            } catch (Exception e) {
-                throw new RuntimeException("Cloudinary upload failed", e);
-            }
-        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    public String uploadBlocking(byte[] data, String publicId) {
+        try {
+            Map<?, ?> result = cloudinary.uploader().upload(
+                    data,
+                    ObjectUtils.asMap(
+                            "public_id", baseFolder + "/" + publicId,
+                            "overwrite", true,
+                            "resource_type", "image"
+                    )
+            );
+            return result.get("secure_url").toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary upload failed", e);
+        }
     }
 
     @Override
-    public Uni<Void> delete(String fullPublicId) {
-        return Uni.createFrom().voidItem()
-                .invoke(() -> {
-                    try {
-                        cloudinary.uploader().destroy(
-                                fullPublicId,
-                                ObjectUtils.asMap("resource_type", "image")
-                        );
-                    } catch (Exception e) {
-                        throw new RuntimeException("Cloudinary delete failed", e);
-                    }
-                })
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    public void deleteBlocking(String fullPublicId) {
+        try {
+            cloudinary.uploader().destroy(
+                    fullPublicId,
+                    ObjectUtils.asMap("resource_type", "image")
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Cloudinary delete failed", e);
+        }
     }
 
 }

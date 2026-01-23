@@ -130,15 +130,44 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Uni<ProductResponse> uploadProductImage(
+    public Uni<ProductResponse> uploadProductImage(UUID productId, ImageUploadForm form) {
+
+        // 1️⃣ BLOCKING – chạy worker thread
+        return Uni.createFrom().item(() ->
+                        uploadImagesBlocking(productId, form)
+                )
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+
+                // 2️⃣ QUAY VỀ EVENT LOOP → DB
+                .flatMap(urls ->
+                        updateProductImages(productId, urls)
+                )
+                .map(ProductResponse::from);
+    }
+
+    private Map<String, String> uploadImagesBlocking(
             UUID productId,
             ImageUploadForm form
     ) {
-        return processAndUploadImages(productId, form)   // CLOUD
-                .flatMap(urls ->
-                        updateProductImages(productId, urls) // DB
-                )
-                .map(ProductResponse::from);
+        try {
+            byte[] original = Files.readAllBytes(form.file.uploadedFile());
+
+            byte[] image = imageResizeService.resizeToJpeg(original, 1024, 1024);
+            byte[] thumb = imageResizeService.resizeToJpeg(original, 300, 300);
+
+            String imageUrl = fileStorageService
+                    .uploadBlocking(image, productId + "/image");
+
+            String thumbUrl = fileStorageService
+                    .uploadBlocking(thumb, productId + "/thumbnail");
+
+            return Map.of(
+                    "imageUrl", imageUrl,
+                    "thumbUrl", thumbUrl
+            );
+        } catch (IOException e) {
+            throw new RuntimeException("Read image failed", e);
+        }
     }
 
     @WithTransaction
@@ -155,16 +184,21 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public Uni<Void> deleteProductImage(UUID productId) {
+
         return detachProductImages(productId)
+
+                // chạy delete cloudinary trên worker
                 .flatMap(ids ->
-                        Uni.combine().all().unis(
-                                ids.get("image") != null
-                                        ? fileStorageService.delete(ids.get("image"))
-                                        : Uni.createFrom().voidItem(),
-                                ids.get("thumb") != null
-                                        ? fileStorageService.delete(ids.get("thumb"))
-                                        : Uni.createFrom().voidItem()
-                        ).discardItems()
+                        Uni.createFrom().voidItem()
+                                .invoke(() -> {
+                                    if (ids.get("image") != null) {
+                                        fileStorageService.deleteBlocking(ids.get("image"));
+                                    }
+                                    if (ids.get("thumb") != null) {
+                                        fileStorageService.deleteBlocking(ids.get("thumb"));
+                                    }
+                                })
+                                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
                 );
     }
 
@@ -181,46 +215,6 @@ public class ProductServiceImpl implements ProductService {
                     product.setThumbnailUrl(null);
                     return ids;
                 });
-    }
-
-private Uni<Map<String, String>> processAndUploadImages(
-            UUID productId,
-            ImageUploadForm form
-    ) {
-        return Uni.createFrom().item(() -> {
-                    try {
-                        byte[] original = Files.readAllBytes(form.file.uploadedFile());
-
-                        byte[] image = imageResizeService.resizeToJpeg(original, 1024, 1024);
-                        byte[] thumb = imageResizeService.resizeToJpeg(original, 300, 300);
-
-                        return Map.of(
-                                "image", image,
-                                "thumb", thumb
-                        );
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                })
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
-                .flatMap(map ->
-                        fileStorageService.upload(
-                                map.get("image"),
-                                productId + "/image",
-                                "image/webp"
-                        ).flatMap(imageUrl ->
-                                fileStorageService.upload(
-                                        map.get("thumb"),
-                                        productId + "/thumbnail",
-                                        "image/webp"
-                                ).map(thumbUrl ->
-                                        Map.of(
-                                                "imageUrl", imageUrl,
-                                                "thumbUrl", thumbUrl
-                                        )
-                                )
-                        )
-                );
     }
 
     private String extractPublicId(String url) {

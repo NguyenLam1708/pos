@@ -162,7 +162,6 @@ public class  ProductResource {
     @POST
     @Path("/{id}/image")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Blocking
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
