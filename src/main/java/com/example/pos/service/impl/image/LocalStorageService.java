@@ -1,8 +1,6 @@
 package com.example.pos.service.impl.image;
 
 import io.quarkus.arc.profile.IfBuildProfile;
-import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.nio.file.Files;
@@ -15,39 +13,27 @@ public class LocalStorageService implements FileStorageService {
     private static final Path ROOT = Path.of("uploads");
 
     @Override
-    public Uni<String> upload(byte[] data, String path, String contentType) {
+    public String uploadBlocking(byte[] data, String path) {
+        try {
+            Path filePath = ROOT.resolve(path);
 
-        return Uni.createFrom().item(() -> {
-            try {
-                Path filePath = ROOT.resolve(path);
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, data);
 
-                // tạo folder nếu chưa có
-                Files.createDirectories(filePath.getParent());
+            return "http://localhost:8080/uploads/" + path;
 
-                // ghi file
-                Files.write(filePath, data);
-
-                return "http://localhost:8080/uploads/" + path;
-
-            } catch (Exception e) {
-                throw new RuntimeException("Local file upload failed", e);
-            }
-        });
+        } catch (Exception e) {
+            throw new RuntimeException("Local file upload failed", e);
+        }
     }
 
     @Override
-    public Uni<Void> delete(String path) {
-
-        return Uni.createFrom().<Void>nullItem()
-                .invoke(() -> {
-                    try {
-                        Path filePath = ROOT.resolve(path);
-                        Files.deleteIfExists(filePath);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Local file delete failed", e);
-                    }
-                })
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    public void deleteBlocking(String path) {
+        try {
+            Path filePath = ROOT.resolve(path);
+            Files.deleteIfExists(filePath);
+        } catch (Exception e) {
+            throw new RuntimeException("Local file delete failed", e);
+        }
     }
-
 }
