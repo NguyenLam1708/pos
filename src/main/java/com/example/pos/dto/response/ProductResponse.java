@@ -14,7 +14,6 @@ public class ProductResponse {
     UUID categoryId;
     long price;
     String imageUrl;
-    String thumbnailUrl;
 
     public static ProductResponse from(Product product) {
         return ProductResponse.builder()
@@ -23,7 +22,6 @@ public class ProductResponse {
                 .categoryId(product.getCategoryId())
                 .price(product.getPrice())
                 .imageUrl(product.getImageUrl())
-                .thumbnailUrl(product.getThumbnailUrl())
                 .build();
     }
 }

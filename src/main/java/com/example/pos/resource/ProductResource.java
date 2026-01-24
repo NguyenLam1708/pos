@@ -1,13 +1,12 @@
 package com.example.pos.resource;
 
 import com.example.pos.dto.request.CreateProductRequest;
-import com.example.pos.dto.request.ImageUploadForm;
+import com.example.pos.dto.request.ProductImageRequest;
 import com.example.pos.dto.request.UpdateProductRequest;
 import com.example.pos.dto.response.ApiResponse;
 import com.example.pos.service.ProductService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
-import io.smallrye.common.annotation.Blocking;
-import io.smallrye.common.annotation.NonBlocking;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -159,54 +158,45 @@ public class  ProductResource {
                 .replaceWith(Response.noContent().build());
     }
 
-    @POST
+    @PUT
     @Path("/{id}/image")
-    @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @NonBlocking
+    @WithSession
+    @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed("ADMIN")
     @Tag(name = "Product - Admin")
     @Operation(
-            summary = "Upload product image",
+            summary = "Attach product image",
             description = """
-        Admin only.
-        Upload or replace product image.
-        Image will be converted to WebP and a thumbnail will be generated.
-        """
+            Admin only.
+            Attach an uploaded image URL to product.
+            This endpoint does NOT upload image.
+            """
     )
-    @APIResponse(responseCode = "200", description = "Image uploaded successfully")
-    @APIResponse(responseCode = "404", description = "Product not found")
-    @APIResponse(responseCode = "403", description = "Access denied")
-    public Uni<Response> uploadImage(
-            @Parameter(description = "Product ID", required = true)
-            @PathParam("id") UUID id,
-            @BeanParam ImageUploadForm form
+    public Uni<Response> updateImage(
+            @PathParam("id") UUID productId,
+            ProductImageRequest req
     ) {
         return productService
-                .uploadProductImage(id, form)
+                .updateProductImage(productId, req.imageUrl())
                 .map(r -> Response.ok(ApiResponse.success(r)).build());
     }
 
     @DELETE
     @Path("/{id}/image")
+    @WithSession
     @RolesAllowed("ADMIN")
-    @NonBlocking
     @Tag(name = "Product - Admin")
     @Operation(
-            summary = "Delete product image",
+            summary = "Remove product image",
             description = """
-        Admin only.
-        Remove product image and thumbnail.
-        """
+            Admin only.
+            Remove product image URL from database.
+            Does NOT delete image from cloud storage.
+            """
     )
-    @APIResponse(responseCode = "204", description = "Image deleted")
-    @APIResponse(responseCode = "403", description = "Access denied")
-    public Uni<Response> deleteImage(
-            @Parameter(description = "Product ID", required = true)
-            @PathParam("id") UUID id
-    ) {
+    public Uni<Response> deleteImage(@PathParam("id") UUID productId) {
         return productService
-                .deleteProductImage(id)
+                .deleteProductImage(productId)
                 .replaceWith(Response.noContent().build());
     }
-
 }
