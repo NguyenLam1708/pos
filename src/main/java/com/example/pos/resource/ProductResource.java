@@ -162,8 +162,8 @@ public class  ProductResource {
     @POST
     @Path("/{id}/image")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @NonBlocking
     @RolesAllowed("ADMIN")
-    @WithSession
     @Tag(name = "Product - Admin")
     @Operation(
             summary = "Upload product image",
@@ -189,7 +189,7 @@ public class  ProductResource {
     @DELETE
     @Path("/{id}/image")
     @RolesAllowed("ADMIN")
-    @WithSession
+    @NonBlocking
     @Tag(name = "Product - Admin")
     @Operation(
             summary = "Delete product image",

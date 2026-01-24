@@ -132,13 +132,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public Uni<ProductResponse> uploadProductImage(UUID productId, ImageUploadForm form) {
 
-        // 1️⃣ BLOCKING: resize + upload cloudinary → WORKER THREAD
-        Uni<Map<String, String>> uploadUni =
-                Uni.createFrom().item(() -> uploadImagesBlocking(productId, form))
-                        .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+        // 1. Worker: resize + upload
+        return Uni.createFrom().item(() -> uploadImagesBlocking(productId, form))
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
 
-        // 2️⃣ EVENT LOOP: mở transaction & update DB
-        return uploadUni
+                // 2. QUAY LẠI EVENT LOOP trước khi DB
+                .emitOn(Infrastructure.getDefaultExecutor())
+
+                // 3. DB (Hibernate Reactive)
                 .flatMap(urls -> updateProductImagesTx(productId, urls))
                 .map(ProductResponse::from);
     }
@@ -171,17 +172,12 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @WithTransaction
-    Uni<Product> updateProductImagesTx(
-            UUID productId,
-            Map<String, String> urls
-    ) {
+    Uni<Product> updateProductImagesTx(UUID productId, Map<String, String> urls) {
         return productRepository.findById(productId)
-                .onItem().ifNull().failWith(
-                        new BusinessException(404, "Product not found")
-                )
-                .invoke(product -> {
-                    product.setImageUrl(urls.get("imageUrl"));
-                    product.setThumbnailUrl(urls.get("thumbUrl"));
+                .onItem().ifNull().failWith(new BusinessException(404, "Product not found"))
+                .invoke(p -> {
+                    p.setImageUrl(urls.get("imageUrl"));
+                    p.setThumbnailUrl(urls.get("thumbUrl"));
                 });
     }
 
