@@ -4,8 +4,10 @@ import com.example.pos.dto.request.CreateProductRequest;
 import com.example.pos.dto.request.UpdateProductRequest;
 import com.example.pos.dto.response.PageResponse;
 import com.example.pos.dto.response.ProductResponse;
+import com.example.pos.entity.inventory.Inventory;
 import com.example.pos.entity.product.Product;
 import com.example.pos.exception.BusinessException;
+import com.example.pos.repository.InventoryRepository;
 import com.example.pos.repository.ProductRepository;
 import com.example.pos.service.ProductService;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
@@ -23,6 +25,9 @@ public class ProductServiceImpl implements ProductService {
     @Inject
     ProductRepository productRepository;
 
+    @Inject
+    InventoryRepository inventoryRepository;
+
     @Override
     @WithTransaction
     public Uni<ProductResponse> createProduct(CreateProductRequest req) {
@@ -34,8 +39,19 @@ public class ProductServiceImpl implements ProductService {
         product.setImageUrl(null);
 
         return productRepository.persist(product)
+                .flatMap(p -> {
+
+                    Inventory inventory = new Inventory();
+                    inventory.setProductId(p.getId());
+                    inventory.setTotalQuantity(0);
+                    inventory.setAvailableQuantity(0);
+
+                    return inventoryRepository.persist(inventory)
+                            .replaceWith(p);
+                })
                 .map(ProductResponse::from);
     }
+
 
     @Override
     @WithTransaction

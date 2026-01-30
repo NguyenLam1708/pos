@@ -101,6 +101,7 @@ public class OrderItemServiceImpl implements OrderItemService {
                                                             r.setOrderId(orderId);
                                                             r.setProductId(req.getProductId());
                                                             r.setQuantity(qty);
+                                                            r.setBatchNo(batchNo);
                                                             r.setStatus(ReservationStatus.RESERVED);
                                                             r.setExpiresAt(LocalDateTime.now().plusMinutes(15));
 
@@ -122,54 +123,69 @@ public class OrderItemServiceImpl implements OrderItemService {
                 .onItem().ifNull().failWith(
                         new BusinessException(404, "Order not found")
                 )
-                .flatMap(order -> {
+                .flatMap(order ->
+                        orderItemRepository
+                                .findByOrderAndId(orderId, orderItemId)
+                                .onItem().ifNull().failWith(
+                                        new BusinessException(404, "Order item not found")
+                                )
+                                .flatMap(item -> {
 
-                    if (order.getStatus() != OrderStatus.OPEN) {
-                        return Uni.createFrom().failure(
-                                new BusinessException(400, "Order is not open")
-                        );
-                    }
+                                    if (item.getStatus() == OrderItemStatus.CANCELLED) {
+                                        return Uni.createFrom().failure(
+                                                new BusinessException(400, "Item already cancelled")
+                                        );
+                                    }
 
-                    return orderItemRepository
-                            .findByOrderAndId(orderId, orderItemId)
-                            .onItem().ifNull().failWith(
-                                    new BusinessException(404, "Order item not found")
-                            )
-                            .flatMap(item -> {
+                                    if (order.getStatus() == OrderStatus.PAID
+                                            || order.getStatus() == OrderStatus.CANCELLED) {
+                                        return Uni.createFrom().failure(
+                                                new BusinessException(400, "Order cannot be modified")
+                                        );
+                                    }
 
-                                if (item.getStatus() == OrderItemStatus.CANCELLED) {
-                                    return Uni.createFrom().failure(
-                                            new BusinessException(400, "Item already cancelled")
-                                    );
-                                }
+                                    if (item.getStatus() != OrderItemStatus.ORDERED) {
+                                        return Uni.createFrom().failure(
+                                                new BusinessException(400, "Item cannot be cancelled")
+                                        );
+                                    }
 
-                                int qty = item.getQuantity();
-                                UUID productId = item.getProductId();
+                                    if (item.getBatchNo() != order.getCurrentBatchNo()) {
+                                        return Uni.createFrom().failure(
+                                                new BusinessException(400, "Previous batch cannot be cancelled")
+                                        );
+                                    }
 
-                                item.setStatus(OrderItemStatus.CANCELLED);
-                                item.setCancelledAt(LocalDateTime.now());
+                                    int qty = item.getQuantity();
+                                    UUID productId = item.getProductId();
 
-                                return inventoryRepository
-                                        .lockByProductId(productId)
-                                        .flatMap(inventory -> {
+                                    item.setStatus(OrderItemStatus.CANCELLED);
+                                    item.setCancelledAt(LocalDateTime.now());
 
-                                            inventory.setAvailableQuantity(
-                                                    inventory.getAvailableQuantity() + qty
-                                            );
+                                    return inventoryRepository
+                                            .lockByProductId(productId)
+                                            .flatMap(inventory -> {
 
-                                            return inventoryReservationRepository
-                                                    .findActiveByOrderAndProduct(orderId, productId)
-                                                    .flatMap(reservation -> {
-                                                        if (reservation != null) {
-                                                            reservation.setStatus(
-                                                                    ReservationStatus.RELEASED
-                                                            );
-                                                        }
-                                                        return buildOrderDetail(order); // ✅ QUAN TRỌNG
-                                                    });
-                                        });
-                            });
-                });
+                                                inventory.setAvailableQuantity(
+                                                        inventory.getAvailableQuantity() + qty
+                                                );
+
+                                                return inventoryReservationRepository
+                                                        .findActiveByOrderProductAndBatch(
+                                                                orderId,
+                                                                productId,
+                                                                order.getCurrentBatchNo()
+                                                        )
+                                                        .flatMap(reservation -> {
+                                                            if (reservation != null) {
+                                                                reservation.setStatus(ReservationStatus.RELEASED);
+                                                            }
+                                                            return buildOrderDetail(order);
+                                                        });
+
+                                            });
+                                })
+                );
     }
 
     private Uni<OrderDetailResponse> buildOrderDetail(Order order) {

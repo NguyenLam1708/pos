@@ -33,6 +33,9 @@ public class InventoryReservation {
     @Enumerated(EnumType.STRING)
     ReservationStatus status;
 
+    @Column(name = "batch_no", nullable = false)
+    int batchNo;
+
     @Column(name = "expires_at")
     LocalDateTime expiresAt;  // giữ chỗ trong X phút
 }

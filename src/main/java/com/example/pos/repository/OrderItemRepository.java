@@ -95,4 +95,28 @@ public class OrderItemRepository
                         .and("id", orderItemId)
         ).firstResult();
     }
+
+    public Uni<List<OrderItem>> findOrderedItemsByOrderAndBatch(
+            UUID orderId,
+            int batchNo
+    ) {
+        return find(
+                "orderId = ?1 and batchNo = ?2 and status = ?3",
+                orderId,
+                batchNo,
+                OrderItemStatus.ORDERED
+        ).list();
+    }
+
+    public Uni<Boolean> existsConfirmedItemInBatch(UUID orderId, int batchNo) {
+        return find(
+                "orderId = ?1 and batchNo = ?2 and status = ?3",
+                orderId,
+                batchNo,
+                OrderItemStatus.CONFIRMED
+        ).count()
+                .map(count -> count > 0);
+    }
+
+
 }

@@ -26,7 +26,9 @@ public class OrderResponse {
     int totalQuantity;
     LocalDateTime createdAt;
     LocalDateTime confirmedAt;
-    LocalDateTime cancelledAt;    public static OrderResponse from(Order order) {
+    LocalDateTime cancelledAt;
+
+    public static OrderResponse from(Order order) {
         return OrderResponse.builder()
                 .orderId(order.getId())
                 .tableId(order.getTableId())

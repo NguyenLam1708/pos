@@ -4,17 +4,20 @@ import com.example.pos.dto.response.OrderDetailResponse;
 import com.example.pos.dto.response.OrderItemResponse;
 import com.example.pos.dto.response.OrderResponse;
 import com.example.pos.dto.response.PageResponse;
+import com.example.pos.entity.inventory.InventoryReservation;
 import com.example.pos.entity.order.Order;
 import com.example.pos.entity.order.OrderItem;
 import com.example.pos.entity.product.Product;
 import com.example.pos.enums.inventory.ReservationStatus;
 import com.example.pos.enums.order.OrderStatus;
+import com.example.pos.enums.order.OrderItemStatus;
 import com.example.pos.enums.table.TableStatus;
 import com.example.pos.exception.BusinessException;
 import com.example.pos.repository.*;
 import com.example.pos.service.OrderService;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.quarkus.panache.common.Page;
+import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -37,10 +40,10 @@ public class OrderServiceImpl implements OrderService {
     InventoryReservationRepository inventoryReservationRepository;
 
     @Inject
-    RestaurantTableRepository restaurantTableRepository;
+    InventoryRepository inventoryRepository;
 
     @Inject
-    ProductRepository productRepository;
+    RestaurantTableRepository restaurantTableRepository;
 
     @Inject
     RestaurantTableRepository reservationRestaurantTableRepository;
@@ -93,24 +96,25 @@ public class OrderServiceImpl implements OrderService {
                 )
                 .flatMap(order -> {
 
-                    if (order.getStatus() != OrderStatus.OPEN
-                            && order.getStatus() != OrderStatus.CONFIRMED) {
+                    if (order.getStatus() == OrderStatus.PAID
+                            || order.getStatus() == OrderStatus.CANCELLED) {
                         return Uni.createFrom()
-                                .failure(new BusinessException(400, "Order cannot add item"));
+                                .failure(new BusinessException(400, "Order cannot be confirmed"));
                     }
 
-                    return inventoryReservationRepository.findByOrderId(orderId)
+                    int currentBatch = order.getCurrentBatchNo();
+
+                    return inventoryReservationRepository
+                            .findActiveByOrderIdAndBatch(orderId, currentBatch)
                             .flatMap(reservations -> {
 
                                 if (reservations.isEmpty()) {
                                     return Uni.createFrom()
-                                            .failure(new BusinessException(400, "Order has no items"));
+                                            .failure(new BusinessException(400, "No items to confirm"));
                                 }
 
                                 boolean expired = reservations.stream()
-                                        .anyMatch(r ->
-                                                r.getExpiresAt().isBefore(LocalDateTime.now())
-                                        );
+                                        .anyMatch(r -> r.getExpiresAt().isBefore(LocalDateTime.now()));
 
                                 if (expired) {
                                     return Uni.createFrom()
@@ -122,16 +126,18 @@ public class OrderServiceImpl implements OrderService {
                                         r.setStatus(ReservationStatus.CONFIRMED)
                                 );
 
-                                // 2️⃣ Snapshot OrderItem + Order
-                                return orderItemRepository.findByOrderId(orderId)
+                                return orderItemRepository
+                                        .findOrderedItemsByOrderAndBatch(orderId, currentBatch)
                                         .flatMap(items -> {
 
                                             LocalDateTime now = LocalDateTime.now();
 
-                                            long totalAmount = 0;
-                                            int totalQuantity = 0;
+                                            long totalAmount = order.getTotalAmount();
+                                            int totalQuantity = order.getTotalQuantity();
 
+                                            // 2️⃣ Confirm items
                                             for (OrderItem item : items) {
+                                                item.setStatus(OrderItemStatus.CONFIRMED);
                                                 item.setConfirmedAt(now);
                                                 item.setTotalPrice(
                                                         item.getUnitPrice() * item.getQuantity()
@@ -141,11 +147,12 @@ public class OrderServiceImpl implements OrderService {
                                                 totalQuantity += item.getQuantity();
                                             }
 
+                                            // 3️⃣ Snapshot order
                                             order.setConfirmedAt(now);
                                             order.setTotalAmount(totalAmount);
                                             order.setTotalQuantity(totalQuantity);
                                             order.setStatus(OrderStatus.CONFIRMED);
-                                            order.setCurrentBatchNo(order.getCurrentBatchNo() + 1);
+                                            order.setCurrentBatchNo(currentBatch + 1);
 
                                             return Uni.createFrom()
                                                     .item(OrderResponse.from(order));
@@ -183,6 +190,61 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @WithTransaction
+    public Uni<OrderResponse> cancelOrder(UUID orderId) {
+
+        LocalDateTime now = LocalDateTime.now();
+
+        return orderRepository.findById(orderId)
+                .onItem().ifNull().failWith(
+                        new BusinessException(404, "Order not found")
+                )
+                .flatMap(order -> {
+
+                    if (order.getStatus() == OrderStatus.PAID
+                            || order.getStatus() == OrderStatus.CANCELLED) {
+                        return Uni.createFrom().failure(
+                                new BusinessException(400, "Order cannot be cancelled")
+                        );
+                    }
+
+                    int currentBatch = order.getCurrentBatchNo();
+
+                    return orderItemRepository
+                            .findOrderedItemsByOrderAndBatch(orderId, currentBatch)
+                            .flatMap(items -> {
+
+                                if (items.isEmpty() && currentBatch > 0) {
+                                    return Uni.createFrom().failure(
+                                            new BusinessException(400, "Confirmed items cannot be cancelled")
+                                    );
+                                }
+
+                                items.forEach(item -> {
+                                    item.setStatus(OrderItemStatus.CANCELLED);
+                                    item.setCancelledAt(now);
+                                });
+
+                                return inventoryReservationRepository
+                                        .findActiveByOrderIdAndBatch(orderId, currentBatch)
+                                        .flatMap(this::releaseReservations)
+                                        .flatMap(v -> {
+
+                                            order.setStatus(OrderStatus.CANCELLED);
+                                            order.setCancelledAt(now);
+
+                                            return restaurantTableRepository
+                                                    .findById(order.getTableId())
+                                                    .invoke(table ->
+                                                            table.setStatus(TableStatus.AVAILABLE)
+                                                    )
+                                                    .replaceWith(OrderResponse.from(order));
+                                        });
+                            });
+                });
+    }
+
+    @Override
     public Uni<OrderDetailResponse> getOrderDetail(UUID orderId) {
 
         return orderRepository.findById(orderId)
@@ -200,6 +262,25 @@ public class OrderServiceImpl implements OrderService {
                         new BusinessException(404, "Table has no active order")
                 )
                 .flatMap(this::buildOrderDetail);
+    }
+
+    private Uni<Void> releaseReservations(List<InventoryReservation> reservations) {
+
+        return Multi.createFrom().iterable(reservations)
+                .onItem().transformToUniAndMerge(r ->
+                        inventoryRepository
+                                .lockByProductId(r.getProductId())
+                                .invoke(inv ->
+                                        inv.setAvailableQuantity(
+                                                inv.getAvailableQuantity() + r.getQuantity()
+                                        )
+                                )
+                                .invoke(() ->
+                                        r.setStatus(ReservationStatus.RELEASED)
+                                )
+                )
+                .collect().asList()
+                .replaceWithVoid();
     }
 
     private Uni<OrderDetailResponse> buildOrderDetail(Order order) {

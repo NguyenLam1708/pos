@@ -13,6 +13,7 @@ public interface OrderService {
     Uni<OrderResponse> openTable(UUID tableId);
     Uni<OrderResponse> confirmOrder(UUID orderId);
     Uni<OrderResponse> payOrder(UUID orderId);
+    Uni<OrderResponse> cancelOrder(UUID orderId);
     Uni<OrderDetailResponse> getOrderDetail(UUID orderId);
     Uni<OrderDetailResponse> getActiveOrderByTable(UUID tableId);
     Uni<PageResponse<OrderResponse>> getOrders(
