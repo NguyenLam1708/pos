@@ -95,6 +95,39 @@ public class OrderResource {
                 );
     }
 
+    @POST
+    @Path("/{orderId}/cancel")
+    @WithSession
+    @RolesAllowed({ "ADMIN", "USER" })
+    @Operation(
+            summary = "Cancel order",
+            description = """
+        Cancel an active order.
+
+        Allowed roles: ADMIN, USER.
+
+        Business rules:
+        - Cannot cancel an order that is already PAID or CANCELLED.
+        - All ORDERED items in the current batch will be cancelled.
+        - Inventory reservations of the current batch will be released.
+        - Available inventory quantity will be restored.
+        - Order status will be set to CANCELLED.
+        """
+    )
+    @APIResponse(responseCode = "200", description = "Order cancelled successfully")
+    @APIResponse(responseCode = "400", description = "Order cannot be cancelled")
+    @APIResponse(responseCode = "404", description = "Order not found")
+    @APIResponse(responseCode = "403", description = "Access denied")
+    public Uni<Response> cancelOrder(
+            @Parameter(description = "Order ID", required = true)
+            @PathParam("orderId") UUID orderId
+    ) {
+        return orderService.cancelOrder(orderId)
+                .map(result ->
+                        Response.ok(ApiResponse.success(result)).build()
+                );
+    }
+
     @GET
     @Path("/{orderId}")
     @WithSession
