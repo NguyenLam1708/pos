@@ -21,7 +21,7 @@ public class OrderResponse {
     UUID orderId;
     UUID tableId;
     OrderStatus status;
-    int currentBatchNo = 1;
+    int currentBatchNo;
     long totalAmount;
     int totalQuantity;
     LocalDateTime createdAt;

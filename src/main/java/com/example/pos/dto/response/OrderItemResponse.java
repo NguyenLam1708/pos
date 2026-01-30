@@ -15,6 +15,7 @@ public class OrderItemResponse {
     UUID productId;
     String productName;
     String imageUrl;
+    int batchNo ;
     int quantity;
     long unitPrice;
     long totalPrice;
@@ -27,6 +28,7 @@ public class OrderItemResponse {
                 .productName(product.getName())
                 .imageUrl(product.getImageUrl())
                 .quantity(orderItem.getQuantity())
+                .batchNo(orderItem.getBatchNo())
                 .notes(orderItem.getNotes())
                 .unitPrice(orderItem.getUnitPrice())
                 .totalPrice(orderItem.getUnitPrice() * orderItem.getQuantity())
