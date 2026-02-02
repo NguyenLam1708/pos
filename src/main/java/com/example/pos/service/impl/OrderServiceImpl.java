@@ -218,8 +218,8 @@ public class OrderServiceImpl implements OrderService {
                         cancelOrderItems(order, now)
                                 .flatMap(v -> releaseInventory(order))
                                 .flatMap(v -> updateOrderStatus(order, now))
-                                .flatMap(v -> releaseTable(order))
-                                .replaceWith(OrderResponse.from(order))
+                                .flatMap(updatedOrder -> releaseTable(updatedOrder).replaceWith(updatedOrder))
+                                .map(OrderResponse::from)
                 );
     }
 
@@ -288,7 +288,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @WithTransaction
-    Uni<Void> updateOrderStatus(Order order, LocalDateTime now) {
+    Uni<Order> updateOrderStatus(Order order, LocalDateTime now) {
 
         return Uni.createFrom().item(order)
                 .invoke(o -> {
@@ -296,8 +296,10 @@ public class OrderServiceImpl implements OrderService {
                     o.setCancelledAt(now);
                 })
                 .flatMap(v -> orderRepository.flush())
-                .replaceWithVoid();
+                .replaceWith(order);
     }
+
+
 
     @WithTransaction
     Uni<Void> releaseTable(Order order) {
