@@ -190,64 +190,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @WithTransaction
-    public Uni<OrderResponse> cancelOrder(UUID orderId) {
-
-        LocalDateTime now = LocalDateTime.now();
-
-        return orderRepository.findById(orderId)
-                .onItem().ifNull().failWith(
-                        new BusinessException(404, "Order not found")
-                )
-                .flatMap(order -> {
-
-                    if (order.getStatus() == OrderStatus.PAID
-                            || order.getStatus() == OrderStatus.CANCELLED) {
-                        return Uni.createFrom().failure(
-                                new BusinessException(400, "Order cannot be cancelled")
-                        );
-                    }
-
-                    int currentBatch = order.getCurrentBatchNo();
-
-                    return orderItemRepository
-                            .findOrderedItemsByOrderAndBatch(orderId, currentBatch)
-                            .flatMap(items -> {
-
-                                if (items.isEmpty() && currentBatch > 0) {
-                                    return Uni.createFrom().failure(
-                                            new BusinessException(400, "Confirmed items cannot be cancelled")
-                                    );
-                                }
-
-                                items.forEach(item -> {
-                                    item.setStatus(OrderItemStatus.CANCELLED);
-                                    item.setCancelledAt(now);
-                                });
-
-                                return inventoryReservationRepository
-                                        .findActiveByOrderIdAndBatch(orderId, currentBatch)
-                                        .flatMap(this::releaseReservations)
-                                        .flatMap(v -> {
-
-                                            order.setStatus(OrderStatus.CANCELLED);
-                                            order.setCancelledAt(now);
-
-                                            return restaurantTableRepository
-                                                    .findById(order.getTableId())
-                                                    .onItem().ifNull().failWith(
-                                                            new BusinessException(404, "Table not found")
-                                                    )
-                                                    .invoke(table ->
-                                                            table.setStatus(TableStatus.AVAILABLE)
-                                                    )
-                                                    .replaceWith(OrderResponse.from(order));
-                                        });
-                            });
-                });
-    }
-
-    @Override
     public Uni<OrderDetailResponse> getOrderDetail(UUID orderId) {
 
         return orderRepository.findById(orderId)
@@ -267,24 +209,109 @@ public class OrderServiceImpl implements OrderService {
                 .flatMap(this::buildOrderDetail);
     }
 
-    private Uni<Void> releaseReservations(List<InventoryReservation> reservations) {
+    public Uni<OrderResponse> cancelOrder(UUID orderId) {
 
-        return Multi.createFrom().iterable(reservations)
-                .onItem().transformToUniAndMerge(r ->
-                        inventoryRepository
-                                .lockByProductId(r.getProductId())
-                                .invoke(inv ->
-                                        inv.setAvailableQuantity(
-                                                inv.getAvailableQuantity() + r.getQuantity()
-                                        )
-                                )
-                                .invoke(() ->
-                                        r.setStatus(ReservationStatus.RELEASED)
-                                )
+        LocalDateTime now = LocalDateTime.now();
+
+        return findOrderForCancel(orderId)
+                .flatMap(order ->
+                        cancelOrderItems(order, now)
+                                .flatMap(v -> releaseInventory(order))
+                                .flatMap(v -> updateOrderStatus(order, now))
+                                .flatMap(v -> releaseTable(order))
+                                .replaceWith(OrderResponse.from(order))
+                );
+    }
+
+    Uni<Order> findOrderForCancel(UUID orderId) {
+
+        return orderRepository.findById(orderId)
+                .onItem().ifNull().failWith(
+                        new BusinessException(404, "Order not found")
                 )
-                .collect().asList()
+                .invoke(order -> {
+                    if (order.getStatus() == OrderStatus.PAID
+                            || order.getStatus() == OrderStatus.CANCELLED) {
+                        throw new BusinessException(400, "Order cannot be cancelled");
+                    }
+                });
+    }
+
+    @WithTransaction
+    Uni<Void> cancelOrderItems(Order order, LocalDateTime now) {
+
+        int batch = order.getCurrentBatchNo();
+
+        return orderItemRepository
+                .findOrderedItemsByOrderAndBatch(order.getId(), batch)
+                .flatMap(items -> {
+
+                    if (items.isEmpty() && batch > 0) {
+                        return Uni.createFrom().failure(
+                                new BusinessException(400, "Confirmed items cannot be cancelled")
+                        );
+                    }
+
+                    return Uni.createFrom().item(items)
+                            .invoke(list -> list.forEach(item -> {
+                                item.setStatus(OrderItemStatus.CANCELLED);
+                                item.setCancelledAt(now);
+                            }))
+                            .flatMap(v -> orderItemRepository.flush());
+                })
                 .replaceWithVoid();
     }
+
+    @WithTransaction
+    Uni<Void> releaseInventory(Order order) {
+
+        int batch = order.getCurrentBatchNo();
+
+        return inventoryReservationRepository
+                .findActiveByOrderIdAndBatch(order.getId(), batch)
+                .flatMap(this::releaseReservations)
+                .replaceWithVoid();
+    }
+
+    Uni<Void> releaseReservations(List<InventoryReservation> reservations) {
+
+        if (reservations == null || reservations.isEmpty()) {
+            return Uni.createFrom().voidItem();
+        }
+
+        return Uni.createFrom().item(reservations)
+                .invoke(list -> list.forEach(r -> {
+                    r.setStatus(ReservationStatus.RELEASED);
+                }))
+                .flatMap(v -> inventoryReservationRepository.flush())
+                .replaceWithVoid();
+    }
+
+    @WithTransaction
+    Uni<Void> updateOrderStatus(Order order, LocalDateTime now) {
+
+        return Uni.createFrom().item(order)
+                .invoke(o -> {
+                    o.setStatus(OrderStatus.CANCELLED);
+                    o.setCancelledAt(now);
+                })
+                .flatMap(v -> orderRepository.flush())
+                .replaceWithVoid();
+    }
+
+    @WithTransaction
+    Uni<Void> releaseTable(Order order) {
+
+        return restaurantTableRepository
+                .findById(order.getTableId())
+                .onItem().ifNull().failWith(
+                        new BusinessException(404, "Table not found")
+                )
+                .invoke(table -> table.setStatus(TableStatus.AVAILABLE))
+                .flatMap(v -> restaurantTableRepository.flush())
+                .replaceWithVoid();
+    }
+
 
     private Uni<OrderDetailResponse> buildOrderDetail(Order order) {
 
