@@ -235,6 +235,9 @@ public class OrderServiceImpl implements OrderService {
 
                                             return restaurantTableRepository
                                                     .findById(order.getTableId())
+                                                    .onItem().ifNull().failWith(
+                                                            new BusinessException(404, "Table not found")
+                                                    )
                                                     .invoke(table ->
                                                             table.setStatus(TableStatus.AVAILABLE)
                                                     )

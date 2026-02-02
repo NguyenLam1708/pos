@@ -1,7 +1,9 @@
 package com.example.pos.repository;
 
 import com.example.pos.entity.table.RestaurantTable;
+import io.quarkus.hibernate.reactive.panache.PanacheQuery;
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
+import io.quarkus.panache.common.Sort;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;
@@ -17,6 +19,10 @@ public class RestaurantTableRepository
         return find("id", tableId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResult();
+    }
+
+    public PanacheQuery<RestaurantTable> findAllSorted() {
+        return findAll(Sort.by("status").and("tableCode"));
     }
 }
 

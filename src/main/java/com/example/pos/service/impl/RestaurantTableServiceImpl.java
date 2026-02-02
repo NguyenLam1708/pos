@@ -26,7 +26,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 50);
 
-        var query = restaurantTableRepository.findAll();
+        var query = restaurantTableRepository.findAllSorted();
 
         Uni<Long> countUni = query.count();
 
