@@ -1,6 +1,9 @@
 package com.example.pos.resource;
 
+import com.example.pos.dto.request.table.GetTablesRequest;
 import com.example.pos.dto.response.ApiResponse;
+import com.example.pos.dto.response.common.PaginationOutput;
+import com.example.pos.entity.table.RestaurantTable;
 import com.example.pos.service.RestaurantTableService;
 import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.smallrye.mutiny.Uni;
@@ -31,26 +34,18 @@ public class RestaurantTableResource {
     RestaurantTableService tableService;
 
     @GET
-    @WithSession
-    @RolesAllowed({ "ADMIN", "USER" })
+    @RolesAllowed({"ADMIN", "USER"})
     @Operation(
-            summary = "Get restaurant tables",
-            description = "Retrieve a paginated list of restaurant tables. " +
-                    "This API is accessible by both ADMIN and USER roles."
+        summary = "Get restaurant tables",
+        description = "Retrieve a paginated list of restaurant tables. " + "This API is accessible by both ADMIN and USER roles."
     )
     @APIResponse(
-            responseCode = "200",
-            description = "Tables retrieved successfully"
+        responseCode = "200",
+        description = "Tables retrieved successfully"
     )
-    public Uni<Response> getTables(
-            @QueryParam("page") @DefaultValue("0") int page,
-            @QueryParam("size") @DefaultValue("10") int size
-    ) {
-        return tableService
-                .getTables(page, size)
-                .map(result ->
-                        Response.ok(ApiResponse.success(result)).build()
-                );
+    public Uni<PaginationOutput<RestaurantTable>> getTables(
+        @BeanParam GetTablesRequest request) {
+        return tableService.getTables(request);
     }
 
     @GET
