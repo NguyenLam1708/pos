@@ -1,9 +1,15 @@
 package com.example.pos.service.impl;
 
+import com.example.pos.dto.request.GetInventoriesRequest;
+import com.example.pos.dto.request.table.GetTablesRequest;
 import com.example.pos.dto.response.InventoryResponse;
+import com.example.pos.dto.response.common.PaginationOutput;
+import com.example.pos.entity.inventory.Inventory;
+import com.example.pos.entity.table.RestaurantTable;
 import com.example.pos.exception.BusinessException;
 import com.example.pos.repository.InventoryRepository;
 import com.example.pos.service.InventoryService;
+import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -53,4 +59,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(InventoryResponse::from);
     }
 
+    @Override
+    @WithSession
+    public Uni<PaginationOutput<Inventory>> getInventories(GetInventoriesRequest request) {
+        return inventoryRepository.findInventories(request);
+    }
 }

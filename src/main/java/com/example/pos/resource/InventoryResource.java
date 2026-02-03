@@ -1,7 +1,12 @@
 package com.example.pos.resource;
 
+import com.example.pos.dto.request.GetInventoriesRequest;
 import com.example.pos.dto.request.StockRequest;
+import com.example.pos.dto.request.table.GetTablesRequest;
 import com.example.pos.dto.response.InventoryResponse;
+import com.example.pos.dto.response.common.PaginationOutput;
+import com.example.pos.entity.inventory.Inventory;
+import com.example.pos.entity.table.RestaurantTable;
 import com.example.pos.service.impl.InventoryServiceImpl;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.RolesAllowed;
@@ -70,4 +75,24 @@ public class InventoryResource {
                 req.getQuantity()
         );
     }
+
+    @GET
+    @RolesAllowed({"ADMIN", "USER"})
+    @Operation(
+            summary = "Get inventories",
+            description = """
+        Retrieve a paginated list of inventory records.
+        This API allows viewing all inventory items and optionally filtering by product ID.
+        Accessible by both ADMIN and USER roles.
+        """
+    )
+    @APIResponse(
+            responseCode = "200",
+            description = "Inventories retrieved successfully"
+    )
+    public Uni<PaginationOutput<Inventory>> getInventories(
+            @BeanParam GetInventoriesRequest request) {
+        return inventoryService.getInventories(request);
+    }
+
 }

@@ -20,12 +20,11 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Inject
     RestaurantTableRepository restaurantTableRepository;
 
-  @Override
-  @WithSession
-  public Uni<PaginationOutput<RestaurantTable>> getTables(GetTablesRequest request) {
-    return restaurantTableRepository.findByStatus(request);
-  }
-
+    @Override
+    @WithSession
+    public Uni<PaginationOutput<RestaurantTable>> getTables(GetTablesRequest request) {
+        return restaurantTableRepository.findByStatus(request);
+    }
 
     @Override
     public Uni<RestaurantTableResponse> getTable(UUID tableId) {
