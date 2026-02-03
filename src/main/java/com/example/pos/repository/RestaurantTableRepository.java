@@ -29,29 +29,32 @@ public class RestaurantTableRepository
     }
 
     public Uni<PaginationOutput<RestaurantTable>> findByStatus(GetTablesRequest request) {
-        var query = "SELECT r "
-            + "FROM RestaurantTable "
-            + "WHERE r.status = :status";
 
-        Parameters parameters = new Parameters()
-            .and("status", request.getStatus());
+        String query;
+        Parameters params = new Parameters();
 
-        var pq = find(query, parameters);
+        if (request.getStatus() != null) {
+            query = "status = :status ORDER BY status";
+            params.and("status", request.getStatus());
+        } else {
+            query = "ORDER BY status";
+        }
+
+        var pq = find(query, params);
         var page = RequestHelper.toPage(request);
-        return Uni
-            .combine()
-            .all()
-            .unis(pq.page(page).list()
-                , pq.count()
-            )
-            .with((list, count) -> {
-                var out = new PaginationOutput<RestaurantTable>();
-                out.setData(list);
-                out.setTotal(count);
-                out.setPage(page.index);
-                out.setSize(request.getSize());
-                return out;
-            });
+
+        return Uni.combine().all().unis(
+                pq.page(page).list(),
+                pq.count()
+        ).with((list, count) -> {
+            var out = new PaginationOutput<RestaurantTable>();
+            out.setData(list);
+            out.setTotal(count);
+            out.setPage(page.index);
+            out.setSize(request.getSize());
+            return out;
+        });
     }
+
 }
 
