@@ -5,7 +5,9 @@ import com.example.pos.enums.inventory.ReservationStatus;
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.validation.constraints.NotNull;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,5 +43,25 @@ public class InventoryReservationRepository implements PanacheRepositoryBase<Inv
         ).list();
     }
 
+    public Uni<Long> sumActiveReservedByProduct(@NotNull UUID productId) {
+
+        return getSession()
+                .flatMap(session ->
+                        session.createQuery(
+                                        """
+                                        select coalesce(sum(r.quantity), 0)
+                                        from InventoryReservation r
+                                        where r.productId = :productId
+                                          and r.status = :status
+                                          and r.expiresAt > :now
+                                        """,
+                                        Long.class
+                                )
+                                .setParameter("productId", productId)
+                                .setParameter("status", ReservationStatus.RESERVED)
+                                .setParameter("now", LocalDateTime.now())
+                                .getSingleResult()
+                );
+    }
 
 }

@@ -59,61 +59,68 @@ public class OrderItemServiceImpl implements OrderItemService {
                                             .onItem().ifNull().failWith(
                                                     new BusinessException(404, "Inventory not found")
                                             )
-                                            .flatMap(inventory -> {
+                                            .flatMap(inventory ->
 
-                                                if (inventory.getAvailableQuantity() < qty) {
-                                                    return Uni.createFrom()
-                                                            .failure(new BusinessException(409, "Out of stock"));
-                                                }
+                                                    inventoryReservationRepository
+                                                            .sumActiveReservedByProduct(req.getProductId())
+                                                            .flatMap(reservedQty -> {
 
-                                                inventory.setAvailableQuantity(
-                                                        inventory.getAvailableQuantity() - qty
-                                                );
+                                                                long available =
+                                                                        inventory.getAvailableQuantity() - reservedQty;
 
-                                                return orderItemRepository
-                                                        .findByOrderProductBatchAndNotes(
-                                                                orderId,
-                                                                req.getProductId(),
-                                                                batchNo,
-                                                                req.getNotes()
-                                                        )
-                                                        .flatMap(existingItem -> {
+                                                                if (available < qty) {
+                                                                    return Uni.createFrom()
+                                                                            .failure(new BusinessException(409, "Out of stock"));
+                                                                }
 
-                                                            Uni<OrderItem> itemUni;
+                                                                return orderItemRepository
+                                                                        .findByOrderProductBatchAndNotes(
+                                                                                orderId,
+                                                                                req.getProductId(),
+                                                                                batchNo,
+                                                                                req.getNotes()
+                                                                        )
+                                                                        .flatMap(existingItem -> {
 
-                                                            if (existingItem != null) {
-                                                                existingItem.setQuantity(
-                                                                        existingItem.getQuantity() + qty
-                                                                );
-                                                                itemUni = orderItemRepository.persist(existingItem);
-                                                            } else {
-                                                                OrderItem item = new OrderItem();
-                                                                item.setOrderId(orderId);
-                                                                item.setProductId(req.getProductId());
-                                                                item.setQuantity(qty);
-                                                                item.setUnitPrice(product.getPrice());
-                                                                item.setBatchNo(batchNo);
-                                                                item.setNotes(req.getNotes());
-                                                                itemUni = orderItemRepository.persist(item);
-                                                            }
+                                                                            Uni<OrderItem> itemUni;
 
-                                                            InventoryReservation r = new InventoryReservation();
-                                                            r.setOrderId(orderId);
-                                                            r.setProductId(req.getProductId());
-                                                            r.setQuantity(qty);
-                                                            r.setBatchNo(batchNo);
-                                                            r.setStatus(ReservationStatus.RESERVED);
-                                                            r.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+                                                                            if (existingItem != null) {
+                                                                                existingItem.setQuantity(
+                                                                                        existingItem.getQuantity() + qty
+                                                                                );
+                                                                                itemUni = orderItemRepository.persist(existingItem);
+                                                                            } else {
+                                                                                OrderItem item = new OrderItem();
+                                                                                item.setOrderId(orderId);
+                                                                                item.setProductId(req.getProductId());
+                                                                                item.setQuantity(qty);
+                                                                                item.setUnitPrice(product.getPrice());
+                                                                                item.setBatchNo(batchNo);
+                                                                                item.setNotes(req.getNotes());
+                                                                                itemUni = orderItemRepository.persist(item);
+                                                                            }
 
-                                                            return itemUni
-                                                                    .flatMap(v -> inventoryReservationRepository.persist(r))
-                                                                    .flatMap(v -> orderRepository.findById(orderId))
-                                                                    .flatMap(this::buildOrderDetail);
-                                                        });
-                                            })
+                                                                            InventoryReservation r = new InventoryReservation();
+                                                                            r.setOrderId(orderId);
+                                                                            r.setProductId(req.getProductId());
+                                                                            r.setQuantity(qty);
+                                                                            r.setBatchNo(batchNo);
+                                                                            r.setStatus(ReservationStatus.RESERVED);
+                                                                            r.setExpiresAt(
+                                                                                    LocalDateTime.now().plusMinutes(15)
+                                                                            );
+
+                                                                            return itemUni
+                                                                                    .flatMap(v -> inventoryReservationRepository.persist(r))
+                                                                                    .flatMap(v -> orderRepository.findById(orderId))
+                                                                                    .flatMap(this::buildOrderDetail);
+                                                                        });
+                                                            })
+                                            )
                             );
                 });
     }
+
 
     @Override
     @WithTransaction

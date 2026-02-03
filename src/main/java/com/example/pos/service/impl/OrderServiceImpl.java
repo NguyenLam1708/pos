@@ -96,16 +96,23 @@ public class OrderServiceImpl implements OrderService {
                 )
                 .flatMap(order -> {
 
+                    if (order.getStatus() == OrderStatus.CONFIRMED) {
+                        return Uni.createFrom().failure(
+                                new BusinessException(400, "No new items to confirm")
+                        );
+                    }
+
                     if (order.getStatus() == OrderStatus.PAID
                             || order.getStatus() == OrderStatus.CANCELLED) {
                         return Uni.createFrom()
                                 .failure(new BusinessException(400, "Order cannot be confirmed"));
                     }
 
-                    int currentBatch = order.getCurrentBatchNo();
+                    int batch = order.getCurrentBatchNo();
+                    LocalDateTime now = LocalDateTime.now();
 
                     return inventoryReservationRepository
-                            .findActiveByOrderIdAndBatch(orderId, currentBatch)
+                            .findActiveByOrderIdAndBatch(orderId, batch)
                             .flatMap(reservations -> {
 
                                 if (reservations.isEmpty()) {
@@ -114,28 +121,42 @@ public class OrderServiceImpl implements OrderService {
                                 }
 
                                 boolean expired = reservations.stream()
-                                        .anyMatch(r -> r.getExpiresAt().isBefore(LocalDateTime.now()));
+                                        .anyMatch(r -> r.getExpiresAt().isBefore(now));
 
                                 if (expired) {
                                     return Uni.createFrom()
                                             .failure(new BusinessException(409, "Reservation expired"));
                                 }
 
-                                // 1️⃣ Confirm reservations
-                                reservations.forEach(r ->
-                                        r.setStatus(ReservationStatus.CONFIRMED)
-                                );
+                                // 1️⃣ Trừ kho + confirm reservation
+                                return Multi.createFrom().iterable(reservations)
+                                        .onItem().transformToUniAndConcatenate(r ->
+                                                inventoryRepository.lockByProductId(r.getProductId())
+                                                        .invoke(inv ->
+                                                                inv.setAvailableQuantity(
+                                                                        inv.getAvailableQuantity() - r.getQuantity()
+                                                                )
+                                                        )
+                                                        .invoke(() ->
+                                                                r.setStatus(ReservationStatus.CONFIRMED)
+                                                        )
+                                        )
+                                        .collect().asList()
 
-                                return orderItemRepository
-                                        .findOrderedItemsByOrderAndBatch(orderId, currentBatch)
+                                        // 🔥 FLUSH kho + reservation
+                                        .flatMap(v -> inventoryRepository.flush())
+                                        .flatMap(v -> inventoryReservationRepository.flush())
+
+                                        // 2️⃣ Confirm order items
+                                        .flatMap(v ->
+                                                orderItemRepository
+                                                        .findOrderedItemsByOrderAndBatch(orderId, batch)
+                                        )
                                         .flatMap(items -> {
 
-                                            LocalDateTime now = LocalDateTime.now();
-
                                             long totalAmount = order.getTotalAmount();
-                                            int totalQuantity = order.getTotalQuantity();
+                                            int totalQty = order.getTotalQuantity();
 
-                                            // 2️⃣ Confirm items
                                             for (OrderItem item : items) {
                                                 item.setStatus(OrderItemStatus.CONFIRMED);
                                                 item.setConfirmedAt(now);
@@ -144,18 +165,19 @@ public class OrderServiceImpl implements OrderService {
                                                 );
 
                                                 totalAmount += item.getTotalPrice();
-                                                totalQuantity += item.getQuantity();
+                                                totalQty += item.getQuantity();
                                             }
 
-                                            // 3️⃣ Snapshot order
                                             order.setConfirmedAt(now);
                                             order.setTotalAmount(totalAmount);
-                                            order.setTotalQuantity(totalQuantity);
+                                            order.setTotalQuantity(totalQty);
                                             order.setStatus(OrderStatus.CONFIRMED);
-                                            order.setCurrentBatchNo(currentBatch + 1);
+                                            order.setCurrentBatchNo(batch + 1);
 
-                                            return Uni.createFrom()
-                                                    .item(OrderResponse.from(order));
+                                            // 🔥 FLUSH order item + order
+                                            return orderItemRepository.flush()
+                                                    .flatMap(x -> orderRepository.flush())
+                                                    .replaceWith(OrderResponse.from(order));
                                         });
                             });
                 });
@@ -179,15 +201,20 @@ public class OrderServiceImpl implements OrderService {
 
                     order.setStatus(OrderStatus.PAID);
 
-                    return restaurantTableRepository.findById(order.getTableId())
-                            .onItem().ifNull().failWith(
-                                    new BusinessException(404, "Table not found")
-                            )
-                            .invoke(table -> table.setStatus(TableStatus.AVAILABLE))
-                            .replaceWith(order);
+                    return orderRepository.flush()
+                            .flatMap(v ->
+                                    restaurantTableRepository.findById(order.getTableId())
+                                            .onItem().ifNull().failWith(
+                                                    new BusinessException(404, "Table not found")
+                                            )
+                                            .invoke(table -> table.setStatus(TableStatus.AVAILABLE))
+                                            .flatMap(x -> restaurantTableRepository.flush())
+                                            .replaceWith(order)
+                            );
                 })
                 .map(OrderResponse::from);
     }
+
 
     @Override
     public Uni<OrderDetailResponse> getOrderDetail(UUID orderId) {
@@ -229,11 +256,25 @@ public class OrderServiceImpl implements OrderService {
                 .onItem().ifNull().failWith(
                         new BusinessException(404, "Order not found")
                 )
-                .invoke(order -> {
+                .flatMap(order -> {
+
                     if (order.getStatus() == OrderStatus.PAID
                             || order.getStatus() == OrderStatus.CANCELLED) {
-                        throw new BusinessException(400, "Order cannot be cancelled");
+                        return Uni.createFrom().failure(
+                                new BusinessException(400, "Order cannot be cancelled")
+                        );
                     }
+
+                    return orderItemRepository
+                            .existsConfirmedItem(order.getId())
+                            .flatMap(exists -> {
+                                if (exists) {
+                                    return Uni.createFrom().failure(
+                                            new BusinessException(400, "Order has confirmed items")
+                                    );
+                                }
+                                return Uni.createFrom().item(order);
+                            });
                 });
     }
 
@@ -246,18 +287,17 @@ public class OrderServiceImpl implements OrderService {
                 .findOrderedItemsByOrderAndBatch(order.getId(), batch)
                 .flatMap(items -> {
 
-                    if (items.isEmpty() && batch > 0) {
-                        return Uni.createFrom().failure(
-                                new BusinessException(400, "Confirmed items cannot be cancelled")
-                        );
+                    // ✅ Không có item → không làm gì cả
+                    if (items.isEmpty()) {
+                        return Uni.createFrom().voidItem();
                     }
 
-                    return Uni.createFrom().item(items)
-                            .invoke(list -> list.forEach(item -> {
-                                item.setStatus(OrderItemStatus.CANCELLED);
-                                item.setCancelledAt(now);
-                            }))
-                            .flatMap(v -> orderItemRepository.flush());
+                    items.forEach(item -> {
+                        item.setStatus(OrderItemStatus.CANCELLED);
+                        item.setCancelledAt(now);
+                    });
+
+                    return orderItemRepository.flush();
                 })
                 .replaceWithVoid();
     }

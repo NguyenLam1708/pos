@@ -118,5 +118,13 @@ public class OrderItemRepository
                 .map(count -> count > 0);
     }
 
+    public Uni<Boolean> existsConfirmedItem(UUID orderId) {
+        return find(
+                "orderId = ?1 and status = ?2",
+                orderId,
+                OrderItemStatus.CONFIRMED
+        ).firstResult()
+                .map(item -> item != null);
+    }
 
 }
