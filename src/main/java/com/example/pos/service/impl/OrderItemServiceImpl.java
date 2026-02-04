@@ -169,27 +169,17 @@ public class OrderItemServiceImpl implements OrderItemService {
                                     item.setStatus(OrderItemStatus.CANCELLED);
                                     item.setCancelledAt(LocalDateTime.now());
 
-                                    return inventoryRepository
-                                            .lockByProductId(productId)
-                                            .flatMap(inventory -> {
-
-                                                inventory.setAvailableQuantity(
-                                                        inventory.getAvailableQuantity() + qty
-                                                );
-
-                                                return inventoryReservationRepository
-                                                        .findActiveByOrderProductAndBatch(
-                                                                orderId,
-                                                                productId,
-                                                                order.getCurrentBatchNo()
-                                                        )
-                                                        .flatMap(reservation -> {
-                                                            if (reservation != null) {
-                                                                reservation.setStatus(ReservationStatus.RELEASED);
-                                                            }
-                                                            return buildOrderDetail(order);
-                                                        });
-
+                                    return inventoryReservationRepository
+                                            .findActiveByOrderProductAndBatch(
+                                                    orderId,
+                                                    productId,
+                                                    order.getCurrentBatchNo()
+                                            )
+                                            .flatMap(reservation -> {
+                                                if (reservation != null) {
+                                                    reservation.setStatus(ReservationStatus.RELEASED);
+                                                }
+                                                return buildOrderDetail(order);
                                             });
                                 })
                 );
