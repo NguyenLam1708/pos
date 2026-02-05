@@ -321,7 +321,7 @@ public class OrderServiceImpl implements OrderService {
 
         return Uni.createFrom().item(reservations)
                 .invoke(list -> list.forEach(r -> {
-                    r.setStatus(ReservationStatus.RELEASED);
+                    r.setStatus(ReservationStatus.CANCELLED);
                 }))
                 .flatMap(v -> inventoryReservationRepository.flush())
                 .replaceWithVoid();
